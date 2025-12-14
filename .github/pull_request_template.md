@@ -8,7 +8,12 @@ Closes #
 
 ## Acceptance Criteria
 
-<!-- Reference the acceptance criteria from the related issue and check off completed items -->
+<!-- Copy the acceptance criteria from the related issue and check off completed items -->
+<!-- Example:
+- [x] Feature X implemented
+- [x] Tests added and passing
+- [ ] Documentation updated
+-->
 
 - [ ] 
 - [ ] 
