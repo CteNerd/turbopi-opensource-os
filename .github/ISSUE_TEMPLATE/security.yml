@@ -1,0 +1,78 @@
+name: Security Issue
+description: Report a security vulnerability (for public, non-critical issues only)
+title: "SECURITY: "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Security Issue Template
+        
+        **IMPORTANT:** Only use this template for **non-critical, already-public** security issues.
+        
+        For **critical or undisclosed vulnerabilities**, please follow the [Security Policy](../../SECURITY.md):
+        - Use GitHub Security Advisories (preferred), or
+        - Contact the repository owner directly
+        
+        **DO NOT** disclose sensitive security details in public issues.
+
+  - type: checkboxes
+    id: confirm-public
+    attributes:
+      label: Confirmation
+      description: By submitting this issue, you confirm this is appropriate for a public issue
+      options:
+        - label: This is a non-critical, already-public security concern
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Security Concern Description
+      description: Describe the security issue (omit sensitive details if uncertain)
+      placeholder: What is the security concern?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What type of security issue is this?
+      options:
+        - Supply Chain (dependencies, build process)
+        - Configuration (default settings, permissions)
+        - Documentation (security guidance, best practices)
+        - Policy (security process improvement)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential Impact
+      description: What could happen if this issue is not addressed?
+      placeholder: Describe the potential impact...
+    validations:
+      required: true
+
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommended Action
+      description: How should this be addressed?
+      placeholder: Suggest a solution or mitigation...
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to relevant CVEs, security advisories, or documentation
+      placeholder: |
+        - CVE-2024-xxxxx
+        - https://...
+    validations:
+      required: false

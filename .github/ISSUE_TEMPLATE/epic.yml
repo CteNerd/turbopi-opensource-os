@@ -1,0 +1,63 @@
+name: Epic
+description: Large initiative spanning multiple tasks
+title: "EPIC: "
+labels: ["epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Epic Issue Template
+        Use this template for large initiatives that span multiple tasks.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What is the high-level objective of this epic?
+      placeholder: Describe the overall goal...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: In Scope
+      description: What is included in this epic?
+      placeholder: |
+        - Feature A
+        - Feature B
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+      description: What is explicitly NOT included?
+      placeholder: |
+        - Feature X
+        - Feature Y
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: What other epics, tasks, or external dependencies exist?
+      placeholder: |
+        - Depends on Epic #123
+        - Requires external API
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this epic is complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
