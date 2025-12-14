@@ -6,7 +6,7 @@ set -e
 
 INTERFACE="wlan0"
 IP_ADDRESS="192.168.50.1"
-NETMASK="255.255.255.0"
+CIDR="24"
 
 echo "Setting up emergency access point on $INTERFACE..."
 
@@ -18,7 +18,7 @@ sleep 1
 
 # Configure the interface with static IP
 ip addr flush dev $INTERFACE
-ip addr add ${IP_ADDRESS}/${NETMASK} dev $INTERFACE
+ip addr add ${IP_ADDRESS}/${CIDR} dev $INTERFACE
 
 # Bring up the interface
 ip link set $INTERFACE up

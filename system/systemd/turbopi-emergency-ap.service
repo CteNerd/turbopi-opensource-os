@@ -11,17 +11,18 @@ Type=oneshot
 RemainAfterExit=yes
 
 # Setup the network interface
-ExecStart=/usr/local/bin/turbopi/setup-emergency-ap.sh
+ExecStartPre=/usr/local/bin/turbopi/setup-emergency-ap.sh
 
-# Start hostapd for the AP
-ExecStart=/usr/sbin/hostapd -B /etc/turbopi/network/hostapd-emergency.conf
+# Start hostapd for the AP (runs in background with PID file)
+ExecStart=/usr/sbin/hostapd -B -P /run/hostapd-emergency.pid /etc/turbopi/network/hostapd-emergency.conf
 
-# Start dnsmasq for DHCP
-ExecStart=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf
+# Start dnsmasq for DHCP (with PID file)
+ExecStartPost=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid
 
-# Cleanup on stop
-ExecStop=/usr/bin/killall hostapd
-ExecStop=/usr/bin/killall dnsmasq
+# Cleanup on stop - use PID files for reliable process termination
+ExecStop=/bin/sh -c 'test -f /run/hostapd-emergency.pid && kill $(cat /run/hostapd-emergency.pid) || true'
+ExecStop=/bin/sh -c 'test -f /run/dnsmasq-emergency.pid && kill $(cat /run/dnsmasq-emergency.pid) || true'
+ExecStopPost=/bin/rm -f /run/hostapd-emergency.pid /run/dnsmasq-emergency.pid
 
 # Restart policy
 Restart=on-failure

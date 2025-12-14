@@ -76,10 +76,14 @@ The recommended approach is to use a USB Wi-Fi adapter for home network connecti
 
 ### Security Considerations
 
-- The default password (`turbopi123`) should be changed for production use
+- **IMPORTANT**: The default password (`turbopi123`) is weak and **MUST** be changed for production use
+  - Edit `/etc/turbopi/network/hostapd-emergency.conf` and change the `wpa_passphrase` value
+  - Use a strong password of 8-63 characters
+  - Restart the service after changing: `sudo systemctl restart turbopi-emergency-ap.service`
 - The emergency AP is intended for local setup and recovery only
 - SSH access should be restricted to development environments
 - Consider implementing additional authentication for the web UI
+- For production deployments, consider generating unique passwords per device
 
 ### Troubleshooting
 
