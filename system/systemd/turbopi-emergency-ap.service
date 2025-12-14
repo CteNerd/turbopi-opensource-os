@@ -1,0 +1,31 @@
+[Unit]
+Description=TurboPi Emergency Access Point
+After=network-pre.target
+Before=network-online.target
+Wants=network-pre.target
+# Ensure we start before other network services
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Setup the network interface
+ExecStart=/usr/local/bin/turbopi/setup-emergency-ap.sh
+
+# Start hostapd for the AP
+ExecStart=/usr/sbin/hostapd -B /etc/turbopi/network/hostapd-emergency.conf
+
+# Start dnsmasq for DHCP
+ExecStart=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf
+
+# Cleanup on stop
+ExecStop=/usr/bin/killall hostapd
+ExecStop=/usr/bin/killall dnsmasq
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
