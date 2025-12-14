@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: TurboPi OpenSource OS API
+  version: 0.1.0
+  description: >
+    Backend API for TurboPi OpenSource OS.
+    All hardware control and system actions must go through this API.
+servers:
+  - url: http://{robot_ip}:8080
+paths:
+
+  /health:
+    get:
+      summary: System health
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  uptime: { type: number }
+                  cpu_temp: { type: number }
+                  version: { type: string }
+
+  /system/version:
+    get:
+      summary: Get current software version
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current: { type: string }
+                  latest_stable: { type: string }
+
+  /system/restart:
+    post:
+      summary: Restart TurboPi services
+      responses:
+        '202':
+          description: Restart initiated
+
+  /system/reboot:
+    post:
+      summary: Reboot the robot
+      responses:
+        '202':
+          description: Reboot initiated
+
+  /updates/check:
+    get:
+      summary: Check for available updates
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  update_available: { type: boolean }
+                  latest_version: { type: string }
+
+  /updates/apply:
+    post:
+      summary: Apply latest stable update
+      responses:
+        '202':
+          description: Update started
+
+  /control/arm:
+    post:
+      summary: Arm motors
+      responses:
+        '200': { description: Armed }
+
+  /control/disarm:
+    post:
+      summary: Disarm motors
+      responses:
+        '200': { description: Disarmed }
+
+  /control/estop:
+    post:
+      summary: Emergency stop
+      responses:
+        '200': { description: E-Stop engaged }
+
+  /voice/stt:
+    post:
+      summary: Speech to text
+      requestBody:
+        required: true
+        content:
+          audio/wav: {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transcript: { type: string }
+
+  /voice/tts:
+    post:
+      summary: Text to speech
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string }
+      responses:
+        '200':
+          description: Audio stream returned
