@@ -1,0 +1,84 @@
+name: Bug Report
+description: Report a problem or unexpected behavior
+title: "BUG: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report Template
+        Use this template to report bugs or unexpected behavior.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Clear and concise description of the bug
+      placeholder: What went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+      placeholder: Describe the expected behavior...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Describe what actually occurred...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - Critical (System unusable, safety concern)
+        - High (Major feature broken)
+        - Medium (Feature partially broken)
+        - Low (Minor issue, workaround exists)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: System information (OS, version, hardware, etc.)
+      placeholder: |
+        - OS: Raspberry Pi OS
+        - Version: v1.2.3
+        - Hardware: Raspberry Pi 4
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Error Messages
+      description: Any relevant log output or error messages
+      placeholder: Paste logs here...
+      render: shell
+    validations:
+      required: false
