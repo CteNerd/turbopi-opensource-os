@@ -27,7 +27,25 @@ The emergency access point provides always-on network access for setup and recov
 
 ### Installation
 
-**Note**: Run all commands from the repository root directory.
+#### Automated Installation (Recommended)
+
+The automated installation script handles MAC address replacement, error checking, and interactive prompts:
+
+```bash
+cd system
+sudo ./install-emergency-ap.sh
+```
+
+The script will:
+- Install required packages (hostapd, dnsmasq)
+- Automatically replace the `<MAC>` placeholder in the SSID with your device's MAC address
+- Copy configuration files to the appropriate locations
+- Enable and start the systemd service
+- Display the configured SSID and password
+
+#### Manual Installation
+
+**Note**: Run all commands from the repository root directory. If you use manual installation, you must manually replace the `<MAC>` placeholder in the hostapd configuration file with the last 4 characters of your wlan0 MAC address.
 
 1. Install required packages:
    ```bash
@@ -47,7 +65,17 @@ The emergency access point provides always-on network access for setup and recov
    sudo chmod +x /usr/local/bin/turbopi/setup-emergency-ap.sh
    ```
 
-3. Install and enable the systemd service (run from repository root):
+3. **IMPORTANT**: Replace the MAC placeholder in the SSID:
+   ```bash
+   # Get your wlan0 MAC address (note the last 4 hex characters)
+   ip link show wlan0 | grep 'link/ether'
+   
+   # Edit the hostapd config and replace <MAC> with your MAC suffix
+   # Example: if MAC is aa:bb:cc:dd:ee:ff, change ssid to TurboPi-Emergency-EEFF
+   sudo nano /etc/turbopi/network/hostapd-emergency.conf
+   ```
+
+4. Install and enable the systemd service (run from repository root):
    ```bash
    # Run these commands from the repository root directory
    sudo cp system/systemd/turbopi-emergency-ap.service /etc/systemd/system/
@@ -56,7 +84,7 @@ The emergency access point provides always-on network access for setup and recov
    sudo systemctl start turbopi-emergency-ap.service
    ```
 
-4. Verify the service is running:
+5. Verify the service is running:
    ```bash
    sudo systemctl status turbopi-emergency-ap.service
    ```

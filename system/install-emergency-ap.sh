@@ -4,6 +4,32 @@
 
 set -e
 
+# Trap errors and print a helpful message
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2; exit 99' ERR
+
+# Helper function for prompts with timeout
+# Usage: prompt_yes_no "prompt message" "skip message"
+# Returns: 0 for yes, 1 for no/timeout/non-interactive
+prompt_yes_no() {
+    local prompt_msg="$1"
+    local skip_msg="$2"
+    
+    if [ -t 0 ]; then
+        # Interactive terminal
+        local yn
+        read -t 30 -p "$prompt_msg [y/N]: " yn || yn="N"
+        case "$yn" in
+            [Yy]*) return 0 ;;
+            *) echo "$skip_msg"; return 1 ;;
+        esac
+    else
+        # Non-interactive environment
+        echo "Non-interactive environment detected. Skipping service start." >&2
+        echo "$skip_msg"
+        return 1
+    fi
+}
+
 # Detect script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -85,15 +111,8 @@ systemctl enable turbopi-emergency-ap.service
 # Check if wlan0 is available before starting
 if ! ip link show wlan0 > /dev/null 2>&1; then
     echo "WARNING: wlan0 interface not found. The emergency AP service may not work." >&2
-    if [ -t 0 ]; then
-        read -t 30 -p "Continue and attempt to start the service anyway? [y/N]: " yn || yn="N"
-        case "$yn" in
-            [Yy]*) ;;
-            *) echo "Skipping service start. You can start it manually later with: systemctl start turbopi-emergency-ap.service"; exit 0;;
-        esac
-    else
-        echo "Non-interactive environment detected. Skipping service start." >&2
-        echo "You can start it manually later with: systemctl start turbopi-emergency-ap.service"
+    if ! prompt_yes_no "Continue and attempt to start the service anyway?" \
+        "Skipping service start. You can start it manually later with: systemctl start turbopi-emergency-ap.service"; then
         exit 0
     fi
 else
@@ -101,15 +120,8 @@ else
     if iw wlan0 link 2>/dev/null | grep -q 'Connected'; then
         echo "WARNING: wlan0 is currently connected to another network." >&2
         echo "This may cause the emergency AP service to fail to start." >&2
-        if [ -t 0 ]; then
-            read -t 30 -p "Continue and attempt to start the service anyway? [y/N]: " yn || yn="N"
-            case "$yn" in
-                [Yy]*) ;;
-                *) echo "Skipping service start. You can start it manually later with: systemctl start turbopi-emergency-ap.service"; exit 0;;
-            esac
-        else
-            echo "Non-interactive environment detected. Skipping service start." >&2
-            echo "You can start it manually later with: systemctl start turbopi-emergency-ap.service"
+        if ! prompt_yes_no "Continue and attempt to start the service anyway?" \
+            "Skipping service start. You can start it manually later with: systemctl start turbopi-emergency-ap.service"; then
             exit 0
         fi
     fi
@@ -118,8 +130,15 @@ fi
 echo "Starting service..."
 systemctl start turbopi-emergency-ap.service
 
-# Wait a moment for service to start
-sleep 2
+# Poll for service to become active (up to 10 seconds)
+echo "Waiting for service to start..."
+for i in {1..10}; do
+    if systemctl is-active --quiet turbopi-emergency-ap.service; then
+        echo "Service started successfully."
+        break
+    fi
+    sleep 1
+done
 
 # Check service status
 echo ""
@@ -136,12 +155,13 @@ echo ""
 echo "The emergency AP is using a DEFAULT PASSWORD that MUST be changed"
 echo "immediately after first connection for production use!"
 echo ""
-# Extract configured SSID from hostapd config
+# Extract configured SSID and password from hostapd config
 CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2)
+CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2)
 
 echo "Emergency Access Point Details:"
 echo "  SSID: $CONFIGURED_SSID"
-echo "  Password: TurboPi-7f9d2b1c4e5a  ⚠️  CHANGE THIS NOW!"
+echo "  Password: $CONFIGURED_PASSWORD  ⚠️  CHANGE THIS NOW!"
 echo "  Robot IP: 192.168.50.1"
 echo "  Web UI: http://192.168.50.1:8080"
 echo ""

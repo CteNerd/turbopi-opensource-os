@@ -1,9 +1,10 @@
 [Unit]
 Description=TurboPi Emergency Access Point
-After=network-pre.target
+After=sysinit.target network-pre.target
 Before=network-online.target
 Wants=network-pre.target
 # Ensure we start before other network services
+# After sysinit.target ensures basic system initialization is complete
 DefaultDependencies=no
 
 [Service]
@@ -16,13 +17,13 @@ ExecStartPre=/usr/local/bin/turbopi/setup-emergency-ap.sh
 # Start hostapd for the AP (runs in background with PID file)
 ExecStart=/usr/sbin/hostapd -B -P /run/hostapd-emergency.pid /etc/turbopi/network/hostapd-emergency.conf
 
-# Start dnsmasq for DHCP (with PID file)
-ExecStartPost=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid
+# Start dnsmasq for DHCP (with PID file and explicit logging for startup errors)
+ExecStartPost=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid --log-facility=-
 
-# Cleanup on stop - use explicit SIGTERM with timeout
-# Read PID file atomically to avoid race condition between test and cat
-ExecStop=/bin/sh -c 'PID=$(cat /run/hostapd-emergency.pid 2>/dev/null) && [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null || true'
-ExecStop=/bin/sh -c 'PID=$(cat /run/dnsmasq-emergency.pid 2>/dev/null) && [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null || true'
+# Cleanup on stop - use explicit SIGTERM with timeout and process verification
+# Verify process is actually the expected daemon to avoid PID recycling issues
+ExecStop=/bin/sh -c 'PID=$(cat /run/hostapd-emergency.pid 2>/dev/null) && [ -n "$PID" ] && [ "$(cat /proc/$PID/comm 2>/dev/null)" = "hostapd" ] && kill -TERM "$PID" 2>/dev/null || true'
+ExecStop=/bin/sh -c 'PID=$(cat /run/dnsmasq-emergency.pid 2>/dev/null) && [ -n "$PID" ] && [ "$(cat /proc/$PID/comm 2>/dev/null)" = "dnsmasq" ] && kill -TERM "$PID" 2>/dev/null || true'
 ExecStopPost=/bin/rm -f /run/hostapd-emergency.pid /run/dnsmasq-emergency.pid
 
 # Restart policy - will now properly detect daemon crashes
