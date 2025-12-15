@@ -13,8 +13,8 @@ The emergency access point provides always-on network access for setup and recov
 
 ### Network Details
 
-- **SSID**: `TurboPi-Emergency`
-- **Password**: `turbopi123`
+- **SSID**: `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 characters of wlan0 MAC address)
+- **Password**: `TurboPi-7f9d2b1c4e5a` (default - must be changed for production)
 - **Robot IP**: `192.168.50.1`
 - **DHCP Range**: `192.168.50.10` - `192.168.50.50`
 - **Subnet**: `192.168.50.0/24`
@@ -26,6 +26,8 @@ The emergency access point provides always-on network access for setup and recov
 - Enables access to web UI and SSH (dev mode only)
 
 ### Installation
+
+**Note**: Run all commands from the repository root directory.
 
 1. Install required packages:
    ```bash
@@ -61,7 +63,7 @@ The emergency access point provides always-on network access for setup and recov
 
 Once the emergency AP is active:
 
-1. Connect to the `TurboPi-Emergency` Wi-Fi network using password `turbopi123`
+1. Connect to the `TurboPi-Emergency-<MAC>` Wi-Fi network using password `TurboPi-7f9d2b1c4e5a` (or your customized password)
 2. Open a web browser and navigate to `http://192.168.50.1:8080`
 3. For SSH access (development): `ssh pi@192.168.50.1`
 
@@ -76,14 +78,18 @@ The recommended approach is to use a USB Wi-Fi adapter for home network connecti
 
 ### Security Considerations
 
-- **IMPORTANT**: The default password (`turbopi123`) is weak and **MUST** be changed for production use
+- **IMPORTANT**: The default password (`TurboPi-7f9d2b1c4e5a`) **MUST** be changed for production use
   - Edit `/etc/turbopi/network/hostapd-emergency.conf` and change the `wpa_passphrase` value
   - Use a strong password of 8-63 characters
   - Restart the service after changing: `sudo systemctl restart turbopi-emergency-ap.service`
+- **SSID Customization**: The SSID includes a `<MAC>` placeholder for device identification
+  - Replace `<MAC>` in `/etc/turbopi/network/hostapd-emergency.conf` with the last 4 characters of your wlan0 MAC address
+  - This helps distinguish multiple robots in the same environment
+  - Example: `TurboPi-Emergency-A1B2`
 - The emergency AP is intended for local setup and recovery only
 - SSH access should be restricted to development environments
 - Consider implementing additional authentication for the web UI
-- For production deployments, consider generating unique passwords per device
+- For production deployments, generate unique passwords per device
 
 ### Troubleshooting
 

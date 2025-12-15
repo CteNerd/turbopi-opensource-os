@@ -17,8 +17,8 @@ The TurboPi system includes an always-on emergency access point for setup and re
 
 ### Network Configuration
 
-- **SSID**: `TurboPi-Emergency`
-- **Password**: `turbopi123` (should be changed in production)
+- **SSID**: `TurboPi-Emergency-<MAC>` (device-specific identifier appended)
+- **Password**: `TurboPi-7f9d2b1c4e5a` (default - must be changed in production)
 - **Robot IP**: `192.168.50.1`
 - **DHCP Range**: `192.168.50.10` - `192.168.50.50`
 - **Subnet**: `192.168.50.0/24`

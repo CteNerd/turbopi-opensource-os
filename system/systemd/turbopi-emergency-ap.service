@@ -7,8 +7,8 @@ Wants=network-pre.target
 DefaultDependencies=no
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=forking
+PIDFile=/run/hostapd-emergency.pid
 
 # Setup the network interface
 ExecStartPre=/usr/local/bin/turbopi/setup-emergency-ap.sh
@@ -19,14 +19,15 @@ ExecStart=/usr/sbin/hostapd -B -P /run/hostapd-emergency.pid /etc/turbopi/networ
 # Start dnsmasq for DHCP (with PID file)
 ExecStartPost=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid
 
-# Cleanup on stop - use PID files for reliable process termination
-ExecStop=/bin/sh -c 'test -f /run/hostapd-emergency.pid && kill $(cat /run/hostapd-emergency.pid) || true'
-ExecStop=/bin/sh -c 'test -f /run/dnsmasq-emergency.pid && kill $(cat /run/dnsmasq-emergency.pid) || true'
+# Cleanup on stop - use explicit SIGTERM with timeout
+ExecStop=/bin/sh -c 'test -f /run/hostapd-emergency.pid && kill -TERM $(cat /run/hostapd-emergency.pid) || true'
+ExecStop=/bin/sh -c 'test -f /run/dnsmasq-emergency.pid && kill -TERM $(cat /run/dnsmasq-emergency.pid) || true'
 ExecStopPost=/bin/rm -f /run/hostapd-emergency.pid /run/dnsmasq-emergency.pid
 
-# Restart policy
+# Restart policy - will now properly detect daemon crashes
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
