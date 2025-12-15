@@ -60,3 +60,19 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
 ## 9) Logging and diagnostics
 - Prefer structured logs; avoid logging secrets.
 - Add useful diagnostics to help operate without SSH (where applicable).
+
+## 10) Shell scripting best practices
+- Always quote variables to prevent word splitting: use `"$VAR"` not `$VAR`
+- Use `set -e` to exit on errors; add traps for meaningful error messages
+- Validate inputs and check for required files/interfaces before proceeding
+- When displaying configuration values (passwords, SSIDs), ensure they match the actual config files
+- Use word boundaries in grep patterns: `grep -qw "pattern"` not `grep -q "pattern"` to avoid partial matches
+- For placeholder values in config files (like `<MAC>`, `<PASSWORD>`):
+  - Prefer automatic generation/replacement during installation when safe and possible
+  - If placeholders would break functionality, auto-generate values or fail installation with clear error
+  - Manual post-install configuration contradicts "always-on" or "zero-config" goals
+  - If manual replacement required, make this explicit and provide clear examples
+- Make scripts automation-friendly:
+  - Detect non-interactive environments with `[ -t 0 ]` before using `read` prompts
+  - Add timeouts to `read` commands: use `read -t 30` to prevent hanging in CI/automated deployments
+  - Provide sensible defaults or fail fast with clear errors in non-interactive mode

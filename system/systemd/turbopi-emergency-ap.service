@@ -20,8 +20,9 @@ ExecStart=/usr/sbin/hostapd -B -P /run/hostapd-emergency.pid /etc/turbopi/networ
 ExecStartPost=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid
 
 # Cleanup on stop - use explicit SIGTERM with timeout
-ExecStop=/bin/sh -c 'test -f /run/hostapd-emergency.pid && kill -TERM $(cat /run/hostapd-emergency.pid) || true'
-ExecStop=/bin/sh -c 'test -f /run/dnsmasq-emergency.pid && kill -TERM $(cat /run/dnsmasq-emergency.pid) || true'
+# Read PID file atomically to avoid race condition between test and cat
+ExecStop=/bin/sh -c 'PID=$(cat /run/hostapd-emergency.pid 2>/dev/null) && [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null || true'
+ExecStop=/bin/sh -c 'PID=$(cat /run/dnsmasq-emergency.pid 2>/dev/null) && [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null || true'
 ExecStopPost=/bin/rm -f /run/hostapd-emergency.pid /run/dnsmasq-emergency.pid
 
 # Restart policy - will now properly detect daemon crashes
