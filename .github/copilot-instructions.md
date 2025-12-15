@@ -1,0 +1,62 @@
+# TurboPi OpenSource OS — Copilot Instructions
+
+These instructions apply to Copilot Chat, Copilot code review, and tasks assigned to Copilot in this repository.
+
+## 0) Source of truth and conflicts
+- Treat repository docs as authoritative. If instructions conflict, prefer this order:
+  1) docs/init/*
+  2) docs/api/*
+  3) docs/control/*
+  4) docs/updater/*
+  5) docs/voice/*
+  6) docs/config/*
+  7) Issue description / acceptance criteria
+- If you cannot comply due to missing info, STOP and ask for clarification in the issue/PR notes (do not guess).
+
+## 1) Scope discipline
+- Implement only what the assigned issue requests.
+- Do not introduce new features, new endpoints, or refactors unrelated to the issue.
+- Keep PRs small and reviewable; one concern per PR.
+
+## 2) Safety is non-negotiable (robot control)
+- Default state is motors DISARMED.
+- E-STOP must override everything and be fast and reliable.
+- Voice/LLM output must NEVER directly control motors.
+- All motion commands must go through the safety arbiter and HAL.
+- Disconnects/timeouts must cause STOP.
+
+## 3) Networking rules (Recovery Plane vs Operational Plane)
+- Emergency AP (recovery access) must remain independent and always available.
+- Home Wi-Fi client logic must not break or disable the Emergency AP.
+- Do not merge recovery-plane and operational-plane responsibilities in a single PR unless the issue explicitly says so.
+
+## 4) Update and release rules (supply chain)
+- Updates install only promoted stable releases (no auto-update unless explicitly enabled).
+- Verify integrity (checksum and/or signature when specified).
+- Installs must be atomic and support automatic rollback on failed health checks.
+- “Update Now” may restart services or reboot if required; explain behavior in UI text where relevant.
+- Never hardcode secrets or tokens.
+
+## 5) Configuration rules
+- All runtime configuration is via `/etc/turbopi/config.env` (loaded by systemd EnvironmentFile).
+- Never commit secrets; use placeholder values in docs/examples.
+- Validate config before applying; fail safely.
+
+## 6) API + protocol rules
+- Backend endpoints must match docs/api/OPENAPI.yaml.
+- WebSocket messages must match docs/api/WEBSOCKET_SPEC.md.
+- If an endpoint/protocol change is required, update the spec and explain in the PR.
+
+## 7) Testing expectations
+- Add unit tests for non-trivial logic (parsers, safety, updater, state machines).
+- Avoid hardware assumptions in unit tests; use mocks/fakes.
+- Ensure failure paths are covered (network down, bad checksum, missing config).
+
+## 8) PR hygiene (required)
+- PR title format: "(#ISSUE) <short description>"
+- PR description must include: "Closes #ISSUE" (or Fixes/Resolves) and a checklist of acceptance criteria.
+- If behavior changes, update the relevant docs.
+
+## 9) Logging and diagnostics
+- Prefer structured logs; avoid logging secrets.
+- Add useful diagnostics to help operate without SSH (where applicable).
