@@ -33,8 +33,8 @@ ip link set "$INTERFACE" down 2>/dev/null || true
 sleep 1
 
 # Configure the interface with static IP
-ip addr flush dev $INTERFACE
-ip addr add ${IP_ADDRESS}/${CIDR} dev $INTERFACE
+ip addr flush dev "$INTERFACE"
+ip addr add ${IP_ADDRESS}/${CIDR} dev "$INTERFACE"
 
 # Bring up the interface
 ip link set "$INTERFACE" up
