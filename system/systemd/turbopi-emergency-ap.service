@@ -18,7 +18,8 @@ ExecStartPre=/usr/local/bin/turbopi/setup-emergency-ap.sh
 ExecStart=/usr/sbin/hostapd -B -P /run/hostapd-emergency.pid /etc/turbopi/network/hostapd-emergency.conf
 
 # Start dnsmasq for DHCP (with PID file and explicit logging for startup errors)
-ExecStartPost=/usr/sbin/dnsmasq --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid --log-facility=-
+# --daemon flag ensures dnsmasq forks to background and doesn't block service startup
+ExecStartPost=/usr/sbin/dnsmasq --daemon --conf-file=/etc/turbopi/network/dnsmasq-emergency.conf --pid-file=/run/dnsmasq-emergency.pid --log-facility=-
 
 # Cleanup on stop - use explicit SIGTERM with timeout and process verification
 # Verify process is actually the expected daemon to avoid PID recycling issues

@@ -86,7 +86,9 @@ chmod +x /usr/local/bin/turbopi/setup-emergency-ap.sh
 
 # Auto-generate SSID with MAC address suffix if wlan0 exists
 if ip link show wlan0 > /dev/null 2>&1; then
-    MAC_SUFFIX=$(ip link show wlan0 | grep 'link/ether' | awk '{print $2}' | tail -c 9 | tr -d ':' | tr '[:lower:]' '[:upper:]')
+    # Extract last 4 hex digits (last 2 bytes) from MAC address
+    # For MAC aa:bb:cc:dd:ee:ff, this extracts "EEFF"
+    MAC_SUFFIX=$(ip link show wlan0 | grep 'link/ether' | awk '{print $2}' | tr -d ':' | tr '[:lower:]' '[:upper:]' | tail -c 5 | head -c 4)
     if [ -n "$MAC_SUFFIX" ] && [ ${#MAC_SUFFIX} -eq 4 ]; then
         echo "Configuring SSID with MAC suffix: $MAC_SUFFIX"
         sed -i "s/TurboPi-Emergency-<MAC>/TurboPi-Emergency-$MAC_SUFFIX/g" /etc/turbopi/network/hostapd-emergency.conf
@@ -159,12 +161,23 @@ echo ""
 CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2)
 CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2)
 
-echo "Emergency Access Point Details:"
-echo "  SSID: $CONFIGURED_SSID"
-echo "  Password: $CONFIGURED_PASSWORD  ⚠️  CHANGE THIS NOW!"
-echo "  Robot IP: 192.168.50.1"
-echo "  Web UI: http://192.168.50.1:8080"
-echo ""
+# Validate extracted password (must be 8-63 characters for WPA2)
+if [ -z "$CONFIGURED_PASSWORD" ] || [ ${#CONFIGURED_PASSWORD} -lt 8 ] || [ ${#CONFIGURED_PASSWORD} -gt 63 ]; then
+    echo "Emergency Access Point Details:"
+    echo "  SSID: $CONFIGURED_SSID"
+    echo "  Password: [ERROR: Could not extract valid password from config!]"
+    echo "           Please check /etc/turbopi/network/hostapd-emergency.conf"
+    echo "  Robot IP: 192.168.50.1"
+    echo "  Web UI: http://192.168.50.1:8080"
+    echo ""
+else
+    echo "Emergency Access Point Details:"
+    echo "  SSID: $CONFIGURED_SSID"
+    echo "  Password: $CONFIGURED_PASSWORD  ⚠️  CHANGE THIS NOW!"
+    echo "  Robot IP: 192.168.50.1"
+    echo "  Web UI: http://192.168.50.1:8080"
+    echo ""
+fi
 
 if echo "$CONFIGURED_SSID" | grep -q '<MAC>'; then
     echo "⚠️  CRITICAL: Configuration Required Before Use ⚠️"

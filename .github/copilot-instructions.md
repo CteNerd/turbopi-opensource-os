@@ -66,6 +66,8 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
 - Use `set -e` to exit on errors; add traps for meaningful error messages
 - Validate inputs and check for required files/interfaces before proceeding
 - When displaying configuration values (passwords, SSIDs), ensure they match the actual config files
+  - Extract values from config files with validation (check length, format)
+  - Never hardcode displayed values that could drift from actual config
 - Use word boundaries in grep patterns: `grep -qw "pattern"` not `grep -q "pattern"` to avoid partial matches
 - For placeholder values in config files (like `<MAC>`, `<PASSWORD>`):
   - Prefer automatic generation/replacement during installation when safe and possible
@@ -76,3 +78,11 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
   - Detect non-interactive environments with `[ -t 0 ]` before using `read` prompts
   - Add timeouts to `read` commands: use `read -t 30` to prevent hanging in CI/automated deployments
   - Provide sensible defaults or fail fast with clear errors in non-interactive mode
+- String extraction pitfalls:
+  - When extracting MAC address suffixes, be precise: for last 4 hex digits from `aa:bb:cc:dd:ee:ff`, use `tr -d ':' | tr '[:lower:]' '[:upper:]' | tail -c 5 | head -c 4` to get `EEFF` (not `DDEEFF`)
+  - `tail -c N` includes newline in count; for 4 chars use `tail -c 5 | head -c 4`
+  - Test extraction logic with sample inputs before deployment
+- Service management:
+  - For systemd `Type=forking`, background daemons started in ExecStartPost must use `--daemon` flag to fork properly
+  - Verify processes before sending kill signals: check `/proc/$PID/comm` to prevent PID recycling issues
+  - Use polling loops with timeouts instead of hardcoded sleeps when waiting for services

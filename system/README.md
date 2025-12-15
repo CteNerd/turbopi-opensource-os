@@ -67,11 +67,13 @@ The script will:
 
 3. **IMPORTANT**: Replace the MAC placeholder in the SSID:
    ```bash
-   # Get your wlan0 MAC address (note the last 4 hex characters)
+   # Get your wlan0 MAC address
+   # Note the last 4 hex digits *after removing colons* (i.e., last two bytes concatenated)
    ip link show wlan0 | grep 'link/ether'
    
    # Edit the hostapd config and replace <MAC> with your MAC suffix
-   # Example: if MAC is aa:bb:cc:dd:ee:ff, change ssid to TurboPi-Emergency-EEFF
+   # Example: if MAC is aa:bb:cc:dd:ee:ff, use EEFF (last 4 hex digits, no colons, uppercase)
+   #          so change ssid=TurboPi-Emergency-<MAC> to ssid=TurboPi-Emergency-EEFF
    sudo nano /etc/turbopi/network/hostapd-emergency.conf
    ```
 
