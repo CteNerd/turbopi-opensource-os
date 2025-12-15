@@ -35,8 +35,9 @@ The emergency access point provides always-on network access for setup and recov
    sudo apt-get install hostapd dnsmasq
    ```
 
-2. Copy configuration files:
+2. Copy configuration files (run from repository root):
    ```bash
+   # Run these commands from the repository root directory
    sudo mkdir -p /etc/turbopi/network
    sudo mkdir -p /usr/local/bin/turbopi
    
@@ -46,8 +47,9 @@ The emergency access point provides always-on network access for setup and recov
    sudo chmod +x /usr/local/bin/turbopi/setup-emergency-ap.sh
    ```
 
-3. Install and enable the systemd service:
+3. Install and enable the systemd service (run from repository root):
    ```bash
+   # Run these commands from the repository root directory
    sudo cp system/systemd/turbopi-emergency-ap.service /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable turbopi-emergency-ap.service
