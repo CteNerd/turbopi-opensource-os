@@ -118,35 +118,39 @@ if [ -t 0 ]; then
     
     # Replace the placeholder network block in the config file
     # Use awk to safely replace only the first network block (preserves additional networks)
-    awk -v block="$WPA_BLOCK" '
-        BEGIN {inblock=0; replaced=0; skip_close=0}
-        /^network={/ {
-            if (!replaced) {
-                print block;
-                inblock=1;
-                replaced=1;
-                skip_close=1;
-                next;
-            } else {
-                inblock=1;
-                print;
-                next;
+    # Set restrictive umask to prevent world-readable temp file with PSK
+    (
+        umask 077
+        awk -v block="$WPA_BLOCK" '
+            BEGIN {inblock=0; replaced=0; skip_close=0}
+            /^network={/ {
+                if (!replaced) {
+                    print block;
+                    inblock=1;
+                    replaced=1;
+                    skip_close=1;
+                    next;
+                } else {
+                    inblock=1;
+                    print;
+                    next;
+                }
             }
-        }
-        /^}/ && inblock {
-            inblock=0;
-            if (skip_close) {
-                # Skip closing brace of replaced block (already in WPA_BLOCK)
-                skip_close=0;
-                next;
-            } else {
-                print;
-                next;
+            /^}/ && inblock {
+                inblock=0;
+                if (skip_close) {
+                    # Skip closing brace of replaced block (already in WPA_BLOCK)
+                    skip_close=0;
+                    next;
+                } else {
+                    print;
+                    next;
+                }
             }
-        }
-        !inblock
-    ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
-    mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
+            !inblock
+        ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
+        mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
+    )
     
     # Optional: Prompt for interface
     echo ""
@@ -191,35 +195,39 @@ else
     
     # Replace the placeholder network block in the config file
     # Use awk to safely replace only the first network block (preserves additional networks)
-    awk -v block="$WPA_BLOCK" '
-        BEGIN {inblock=0; replaced=0; skip_close=0}
-        /^network={/ {
-            if (!replaced) {
-                print block;
-                inblock=1;
-                replaced=1;
-                skip_close=1;
-                next;
-            } else {
-                inblock=1;
-                print;
-                next;
+    # Set restrictive umask to prevent world-readable temp file with PSK
+    (
+        umask 077
+        awk -v block="$WPA_BLOCK" '
+            BEGIN {inblock=0; replaced=0; skip_close=0}
+            /^network={/ {
+                if (!replaced) {
+                    print block;
+                    inblock=1;
+                    replaced=1;
+                    skip_close=1;
+                    next;
+                } else {
+                    inblock=1;
+                    print;
+                    next;
+                }
             }
-        }
-        /^}/ && inblock {
-            inblock=0;
-            if (skip_close) {
-                # Skip closing brace of replaced block (already in WPA_BLOCK)
-                skip_close=0;
-                next;
-            } else {
-                print;
-                next;
+            /^}/ && inblock {
+                inblock=0;
+                if (skip_close) {
+                    # Skip closing brace of replaced block (already in WPA_BLOCK)
+                    skip_close=0;
+                    next;
+                } else {
+                    print;
+                    next;
+                }
             }
-        }
-        !inblock
-    ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
-    mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
+            !inblock
+        ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
+        mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
+    )
     
     WIFI_INTERFACE="${WIFI_INTERFACE:-wlan1}"
 fi
