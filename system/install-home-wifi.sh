@@ -132,7 +132,17 @@ if [ -t 0 ]; then
                 next;
             }
         }
-        /^}/ && inblock {inblock=0; print; next}
+        /^}/ && inblock {
+            inblock=0;
+            if (replaced) {
+                # Skip closing brace of replaced block (already in WPA_BLOCK)
+                replaced=0;
+                next;
+            } else {
+                print;
+                next;
+            }
+        }
         !inblock
     ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
     mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
@@ -194,7 +204,17 @@ else
                 next;
             }
         }
-        /^}/ && inblock {inblock=0; print; next}
+        /^}/ && inblock {
+            inblock=0;
+            if (replaced) {
+                # Skip closing brace of replaced block (already in WPA_BLOCK)
+                replaced=0;
+                next;
+            } else {
+                print;
+                next;
+            }
+        }
         !inblock
     ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
     mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
