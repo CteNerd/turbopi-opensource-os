@@ -350,17 +350,18 @@ Common issues:
 
 ### Before Production Deployment
 
-1. **Change Emergency AP Password**:
+1. **Retrieve Emergency AP Password**:
    ```bash
-   sudo nano /etc/turbopi/network/hostapd-emergency.conf
-   # Change wpa_passphrase to strong unique password
-   sudo systemctl restart turbopi-emergency-ap.service
+   # View the auto-generated unique password
+   sudo grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf
    ```
+   
+   Note: The installation script automatically generates a strong, unique password for each device. Record this password securely for future access.
 
-2. **Generate Unique SSID** (if MAC-based SSID not auto-generated):
+2. **Optional: Change Emergency AP Password** (if needed):
    ```bash
-   # Edit hostapd config and replace <MAC> with unique identifier
    sudo nano /etc/turbopi/network/hostapd-emergency.conf
+   # Edit wpa_passphrase line (8-63 characters)
    sudo systemctl restart turbopi-emergency-ap.service
    ```
 

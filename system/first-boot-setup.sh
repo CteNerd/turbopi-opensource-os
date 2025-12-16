@@ -62,7 +62,8 @@ cd "$TURBOPI_REPO_DIR"
 log "Installing Emergency Access Point..."
 if [ -f "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" ]; then
     # Run installation in non-interactive mode
-    if PROMPT_TIMEOUT="$INSTALL_PROMPT_TIMEOUT" "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" >> "$LOG_FILE" 2>&1; then
+    # Capture output to both log and display (to show generated password)
+    if PROMPT_TIMEOUT="$INSTALL_PROMPT_TIMEOUT" "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" 2>&1 | tee -a "$LOG_FILE"; then
         log "Emergency AP installation completed successfully"
     else
         # Check if it failed due to missing wlan0 (might be on different hardware)
@@ -86,13 +87,15 @@ date > "$SETUP_COMPLETE_FLAG"
 log "=== TurboPi First-Boot Setup Completed Successfully ==="
 log ""
 
-# Extract actual configured SSID from the installed config file
+# Extract actual configured SSID and password from the installed config file
 CONFIGURED_SSID=""
+CONFIGURED_PASSWORD=""
 if [ -f "/etc/turbopi/network/hostapd-emergency.conf" ]; then
     CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf 2>/dev/null | cut -d'=' -f2)
+    CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf 2>/dev/null | cut -d'=' -f2)
 fi
 
-# Validate extracted SSID and log appropriate message
+# Validate extracted SSID and password, and log appropriate messages
 log "Emergency Access Point Details:"
 if [ -n "$CONFIGURED_SSID" ] && [ "$CONFIGURED_SSID" != "TurboPi-Emergency-<MAC>" ]; then
     log "  SSID: $CONFIGURED_SSID"
@@ -100,6 +103,14 @@ else
     log "  SSID: Could not determine (check /etc/turbopi/network/hostapd-emergency.conf)"
     log "       Expected format: TurboPi-Emergency-<4-hex-digits>"
 fi
+
+if [ -n "$CONFIGURED_PASSWORD" ] && [ "$CONFIGURED_PASSWORD" != "PLACEHOLDER_WILL_BE_REPLACED_BY_INSTALL_SCRIPT" ]; then
+    log "  Password: $CONFIGURED_PASSWORD"
+    log "           ⚠️  IMPORTANT: Record this password securely!"
+else
+    log "  Password: Could not determine (check /etc/turbopi/network/hostapd-emergency.conf)"
+fi
+
 log "  IP: 192.168.50.1"
 log "  Web UI: http://192.168.50.1:8080"
 log ""

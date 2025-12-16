@@ -105,7 +105,7 @@ else
 fi
 
 # Generate unique per-device password for security
-# Use MAC address and machine-id to generate a deterministic but unique password
+# Use MAC address, machine-id, and salt string to generate a deterministic but unique password
 echo "Generating unique per-device password..."
 if [ -f /etc/machine-id ]; then
     MACHINE_ID=$(cat /etc/machine-id)
