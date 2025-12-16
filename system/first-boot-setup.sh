@@ -83,8 +83,8 @@ fi
 CONFIGURED_SSID=""
 CONFIGURED_PASSWORD=""
 if [ -f "/etc/turbopi/network/hostapd-emergency.conf" ]; then
-    CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf 2>/dev/null | sed -n 's/^ssid=//p')
-    CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf 2>/dev/null | sed -n 's/^wpa_passphrase=//p')
+    CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | sed -n 's/^ssid=//p')
+    CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf | sed -n 's/^wpa_passphrase=//p')
 fi
 
 # Validate extracted SSID and password, and log appropriate messages
@@ -97,7 +97,8 @@ else
 fi
 
 if [ -n "$CONFIGURED_PASSWORD" ] && [ "$CONFIGURED_PASSWORD" != "PLACEHOLDER_WILL_BE_REPLACED_BY_INSTALL_SCRIPT" ]; then
-    # Display password on console only (not in persistent logs for security)
+    # SECURITY: Use echo directly (not log function) to avoid writing password to persistent log files.
+    # Password is displayed on console only and is NOT captured in /var/log or systemd journal.
     echo "  Password: $CONFIGURED_PASSWORD"
     echo "           WARNING: IMPORTANT: Record this password securely!"
 else
