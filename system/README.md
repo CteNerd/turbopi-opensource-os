@@ -2,10 +2,18 @@
 
 This directory contains system-level configuration files for TurboPi OpenSource OS.
 
+## Quick Start
+
+**Creating a Base OS Image**: See [docs/init/BASE_OS_IMAGE.md](../docs/init/BASE_OS_IMAGE.md) for complete instructions on creating a base OS image that boots with the emergency AP pre-configured.
+
+**Testing**: Run `./test-dual-networking.sh` to verify dual networking setup and acceptance criteria.
+
 ## Directory Structure
 
 - `network/` - Network configuration files
 - `systemd/` - Systemd service unit files
+- `first-boot-setup.sh` - First-boot initialization script (automatically installs emergency AP)
+- `test-dual-networking.sh` - Integration test suite for dual networking
 
 ## Emergency Access Point
 

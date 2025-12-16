@@ -1,0 +1,16 @@
+[Unit]
+Description=TurboPi First-Boot Setup
+After=network-pre.target
+Before=network.target
+DefaultDependencies=no
+ConditionPathExists=!/etc/turbopi/.first-boot-complete
+
+[Service]
+Type=oneshot
+ExecStart=/opt/turbopi/system/first-boot-setup.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
