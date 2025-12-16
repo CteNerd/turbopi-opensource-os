@@ -5,7 +5,7 @@
 set -e
 
 # Error handler
-trap 'echo "Error: Setup failed at line $LINENO. Check system logs for details." >&2' ERR
+trap 'echo "Error: Setup failed at line $LINENO. Check system logs with: journalctl -u turbopi-emergency-ap.service" >&2' ERR
 
 INTERFACE="wlan0"
 IP_ADDRESS="192.168.50.1"
@@ -29,7 +29,9 @@ fi
 # Bring down the interface first
 ip link set "$INTERFACE" down 2>/dev/null || true
 
-# Wait a moment for interface to settle
+# Allow kernel and driver to fully release the interface after bringing it down.
+# This delay helps prevent race conditions or configuration errors when reconfiguring the interface.
+# 1 second is typically sufficient for most hardware; adjust if issues are observed.
 sleep 1
 
 # Configure the interface with static IP

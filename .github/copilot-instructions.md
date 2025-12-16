@@ -80,7 +80,7 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
   - Provide sensible defaults or fail fast with clear errors in non-interactive mode
 - String extraction pitfalls:
   - When extracting MAC address suffixes, be precise: for last 4 hex digits from `aa:bb:cc:dd:ee:ff`, use `tr -d ':' | tr '[:lower:]' '[:upper:]' | tail -c 5 | head -c 4` to get `EEFF` (not `DDEEFF`)
-  - `tail -c N` includes newline in count; for 4 chars use `tail -c 5 | head -c 4`
+  - `tail -c N` includes the newline in the count; for 4 chars use `tail -c 5 | head -c 4`
   - Test extraction logic with sample inputs before deployment
 - Service management:
   - For systemd `Type=forking`, background daemons started in ExecStartPost must use `--daemon` flag to fork properly

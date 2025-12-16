@@ -8,16 +8,19 @@ set -e
 trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2; exit 99' ERR
 
 # Helper function for prompts with timeout
+# The prompt timeout can be configured via the PROMPT_TIMEOUT environment variable (default: 30 seconds).
+# 30 seconds was chosen as a balance between not blocking automation and giving users time to respond.
 # Usage: prompt_yes_no "prompt message" "skip message"
 # Returns: 0 for yes, 1 for no/timeout/non-interactive
 prompt_yes_no() {
     local prompt_msg="$1"
     local skip_msg="$2"
+    local timeout="${PROMPT_TIMEOUT:-30}"
     
     if [ -t 0 ]; then
         # Interactive terminal
         local yn
-        read -t 30 -p "$prompt_msg [y/N]: " yn || yn="N"
+        read -t "$timeout" -p "$prompt_msg [y/N]: " yn || yn="N"
         case "$yn" in
             [Yy]*) return 0 ;;
             *) echo "$skip_msg"; return 1 ;;
@@ -133,14 +136,17 @@ echo "Starting service..."
 systemctl start turbopi-emergency-ap.service
 
 # Poll for service to become active (up to 10 seconds)
-echo "Waiting for service to start..."
+echo -n "Waiting for service to start"
 for i in {1..10}; do
     if systemctl is-active --quiet turbopi-emergency-ap.service; then
+        echo ""
         echo "Service started successfully."
         break
     fi
+    echo -n "."
     sleep 1
 done
+echo ""
 
 # Check service status
 echo ""
