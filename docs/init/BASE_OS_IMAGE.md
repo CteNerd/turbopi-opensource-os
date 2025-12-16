@@ -236,6 +236,16 @@ The resulting image will be in `deploy/` directory.
 
 ## Acceptance Criteria Verification
 
+For detailed testing procedures and comprehensive acceptance criteria verification, see [ACCEPTANCE_TESTING.md](ACCEPTANCE_TESTING.md).
+
+### Quick Verification
+
+Run the automated integration test:
+```bash
+cd /opt/turbopi/system
+sudo ./test-dual-networking.sh
+```
+
 ### AC1: Fresh Flash Boots into Emergency AP
 
 1. Flash the image to a fresh SD card
