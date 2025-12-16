@@ -65,18 +65,21 @@ The script will:
    sudo chmod +x /usr/local/bin/turbopi/setup-emergency-ap.sh
    ```
 
-3. **IMPORTANT**: Replace the MAC placeholder in the SSID:
-   ```bash
-   # Get your wlan0 MAC address
-   # Note the last 4 hex digits *after removing colons* (i.e., last two bytes concatenated)
-   ip link show wlan0 | grep 'link/ether'
-   
-   # Edit the hostapd config and replace <MAC> with your MAC suffix
-   # Example: if MAC is aa:bb:cc:dd:ee:ff, use EEFF (last 4 hex digits, no colons, uppercase)
-   #          so change ssid=TurboPi-Emergency-<MAC> to ssid=TurboPi-Emergency-EEFF
-   sudo nano /etc/turbopi/network/hostapd-emergency.conf
-   ```
+3. **IMPORTANT**: Determine your MAC address suffix:
+   - Get your wlan0 MAC address by running:
+     ```bash
+     ip link show wlan0 | grep 'link/ether'
+     ```
+   - Note the last 4 hex digits (i.e., the last two bytes), **after removing colons and using uppercase letters**.  
+     For example, if your MAC is `aa:bb:cc:dd:ee:ff`, use `EEFF`.
 
+4. Replace the `<MAC>` placeholder in the SSID in the hostapd config file:
+   - Edit the config file:
+     ```bash
+     sudo nano /etc/turbopi/network/hostapd-emergency.conf
+     ```
+   - Change the line `ssid=TurboPi-Emergency-<MAC>` to use your MAC suffix.  
+     For example: `ssid=TurboPi-Emergency-EEFF`
 4. Install and enable the systemd service (run from repository root):
    ```bash
    # Run these commands from the repository root directory
