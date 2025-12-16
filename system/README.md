@@ -13,7 +13,7 @@ The emergency access point provides always-on network access for setup and recov
 
 ### Network Details
 
-- **SSID**: `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 characters of wlan0 MAC address)
+- **SSID**: `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits of the wlan0 MAC address, after removing colons)
 - **Password**: `TurboPi-7f9d2b1c4e5a` (default - must be changed for production)
 - **Robot IP**: `192.168.50.1`
 - **DHCP Range**: `192.168.50.10` - `192.168.50.50`

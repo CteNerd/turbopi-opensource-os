@@ -86,3 +86,8 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
   - For systemd `Type=forking`, background daemons started in ExecStartPost must use `--daemon` flag to fork properly
   - Verify processes before sending kill signals: check `/proc/$PID/comm` to prevent PID recycling issues
   - Use polling loops with timeouts instead of hardcoded sleeps when waiting for services
+- Documentation consistency:
+  - When describing MAC address formats or other technical identifiers in multiple places, use consistent precise language
+  - For MAC suffixes: always specify "last 4 hex digits after removing colons" with concrete example (e.g., `EEFF` from `aa:bb:cc:dd:ee:ff`)
+  - Avoid ambiguous phrases like "last 4 characters" which could mean characters with colons or without
+  - Update all documentation locations (README, docs/init, etc.) when clarifying technical details
