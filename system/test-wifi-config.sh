@@ -128,11 +128,14 @@ echo ""
 
 # Test 7: Check for security best practices
 echo "Checking security practices..."
-if ! grep -q "TurboPi-7f9d2b1c4e5a" "$SCRIPT_DIR/network/wpa_supplicant-home.conf" && \
-   ! grep -q "password123" "$SCRIPT_DIR/network/wpa_supplicant-home.conf"; then
-    test_result "No hardcoded real passwords in config" 0
-else
+# Check that config doesn't have common/weak passwords or real credentials
+# Look for placeholder pattern YOUR_HOME_* which should be present in template
+if grep -qE 'psk="[^"]{8,}"' "$SCRIPT_DIR/network/wpa_supplicant-home.conf" && \
+   ! grep -q 'YOUR_HOME' "$SCRIPT_DIR/network/wpa_supplicant-home.conf"; then
+    # Has a real password and no placeholders - likely committed credentials
     test_result "No hardcoded real passwords in config" 1
+else
+    test_result "No hardcoded real passwords in config" 0
 fi
 
 if grep -q "YOUR_HOME_SSID\|YOUR_HOME_PASSWORD" "$SCRIPT_DIR/network/wpa_supplicant-home.conf"; then

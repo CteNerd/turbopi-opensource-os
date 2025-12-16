@@ -33,7 +33,9 @@ fi
 # Install required packages (if not already installed)
 echo "Checking required packages..."
 PACKAGES_TO_INSTALL=""
-for pkg in wpasupplicant dhcpcd5 isc-dhcp-client; do
+# wpasupplicant for Wi-Fi client, isc-dhcp-client for DHCP
+# Note: Using isc-dhcp-client (dhclient) which is standard on Raspberry Pi OS
+for pkg in wpasupplicant isc-dhcp-client; do
     if ! dpkg -l | grep -q "^ii  $pkg"; then
         PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
     fi
@@ -145,6 +147,13 @@ cp "$SCRIPT_DIR/systemd/turbopi-home-wifi.service" /etc/systemd/system/
 # Create systemd override to set the interface
 if [ "$WIFI_INTERFACE" != "wlan1" ]; then
     echo "Creating systemd override for interface $WIFI_INTERFACE..."
+    
+    # Validate interface name to prevent injection
+    if ! echo "$WIFI_INTERFACE" | grep -qE '^wlan[0-9]+$'; then
+        echo "Error: Invalid interface name. Must be wlan0, wlan1, etc." >&2
+        exit 9
+    fi
+    
     mkdir -p /etc/systemd/system/turbopi-home-wifi.service.d
     cat > /etc/systemd/system/turbopi-home-wifi.service.d/interface.conf <<EOF
 [Service]
