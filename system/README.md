@@ -45,7 +45,7 @@ The script will:
 
 #### Manual Installation
 
-**Note**: Run all commands from the repository root directory. If you use manual installation, you must manually replace the `<MAC>` placeholder in the hostapd configuration file with the last 4 characters of your wlan0 MAC address.
+**Note**: Run all commands from the repository root directory. If you use manual installation, you must manually replace the `<MAC>` placeholder in the hostapd configuration file with the last 4 hex digits of the wlan0 MAC address, after removing colons (for example, if your MAC is `7f:9d:2b:1c:4e:5a`, use `4E5A`).
 
 1. Install required packages:
    ```bash
@@ -115,9 +115,9 @@ The recommended approach is to use a USB Wi-Fi adapter for home network connecti
   - Use a strong password of 8-63 characters
   - Restart the service after changing: `sudo systemctl restart turbopi-emergency-ap.service`
 - **SSID Customization**: The SSID includes a `<MAC>` placeholder for device identification
-  - Replace `<MAC>` in `/etc/turbopi/network/hostapd-emergency.conf` with the last 4 characters of your wlan0 MAC address
+  - Replace `<MAC>` in `/etc/turbopi/network/hostapd-emergency.conf` with the last 4 hex digits of the wlan0 MAC address, after removing colons (e.g., `EEFF` from `aa:bb:cc:dd:ee:ff`)
   - This helps distinguish multiple robots in the same environment
-  - Example: `TurboPi-Emergency-A1B2`
+  - Example: `TurboPi-Emergency-EEFF`
 - The emergency AP is intended for local setup and recovery only
 - SSH access should be restricted to development environments
 - Consider implementing additional authentication for the web UI
