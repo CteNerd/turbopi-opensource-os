@@ -5,8 +5,8 @@
 
 set -e
 
-# Trap errors and print a helpful message
-trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2; exit 99' ERR
+# Trap errors and print a helpful message (do not leak secrets)
+trap 'echo "Error on line $LINENO. See above for details." >&2; exit 99' ERR
 
 # Detect script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -105,7 +105,16 @@ if [ -t 0 ]; then
     # Update configuration file with credentials using wpa_passphrase
     echo "Updating configuration with your credentials..."
     # Generate WPA-PSK config block using wpa_passphrase (handles special characters safely)
-    WPA_BLOCK=$(wpa_passphrase "$WIFI_SSID" "$WIFI_PASSWORD" | grep -v '^[[:space:]]*#psk=')
+    if ! WPA_BLOCK=$(wpa_passphrase "$WIFI_SSID" "$WIFI_PASSWORD" 2>&1 | grep -v '^[[:space:]]*#psk='); then
+        echo "Error: wpa_passphrase failed to generate configuration" >&2
+        exit 10
+    fi
+    
+    # Validate wpa_passphrase output
+    if [ -z "$WPA_BLOCK" ] || ! echo "$WPA_BLOCK" | grep -q "network={"; then
+        echo "Error: Invalid wpa_passphrase output" >&2
+        exit 11
+    fi
     
     # Replace the placeholder network block in the config file
     # Use awk to safely replace the network block
@@ -132,6 +141,12 @@ else
         exit 8
     fi
     
+    # Validate SSID is not empty or whitespace-only
+    if [ -z "$(echo "$WIFI_SSID" | tr -d '[:space:]')" ]; then
+        echo "Error: SSID cannot be empty or whitespace-only in non-interactive mode" >&2
+        exit 5
+    fi
+    
     # Validate password length
     if [ ${#WIFI_PASSWORD} -lt 8 ] || [ ${#WIFI_PASSWORD} -gt 63 ]; then
         echo "Error: Password must be 8-63 characters for WPA2" >&2
@@ -141,7 +156,16 @@ else
     # Update configuration file with credentials from environment using wpa_passphrase
     echo "Using credentials from environment variables..."
     # Generate WPA-PSK config block using wpa_passphrase (handles special characters safely)
-    WPA_BLOCK=$(wpa_passphrase "$WIFI_SSID" "$WIFI_PASSWORD" | grep -v '^[[:space:]]*#psk=')
+    if ! WPA_BLOCK=$(wpa_passphrase "$WIFI_SSID" "$WIFI_PASSWORD" 2>&1 | grep -v '^[[:space:]]*#psk='); then
+        echo "Error: wpa_passphrase failed to generate configuration" >&2
+        exit 10
+    fi
+    
+    # Validate wpa_passphrase output
+    if [ -z "$WPA_BLOCK" ] || ! echo "$WPA_BLOCK" | grep -q "network={"; then
+        echo "Error: Invalid wpa_passphrase output" >&2
+        exit 11
+    fi
     
     # Replace the placeholder network block in the config file
     # Use awk to safely replace the network block
@@ -158,6 +182,23 @@ fi
 
 # Set proper permissions on config file (contains password)
 chmod 600 /etc/turbopi/network/wpa_supplicant-home.conf
+
+# Validate configuration file after generation
+echo "Validating configuration..."
+if [ ! -f /etc/turbopi/network/wpa_supplicant-home.conf ]; then
+    echo "Error: Configuration file not found after generation" >&2
+    exit 12
+fi
+
+if ! grep -q "network={" /etc/turbopi/network/wpa_supplicant-home.conf; then
+    echo "Error: Configuration file does not contain network block" >&2
+    exit 13
+fi
+
+if ! grep -q "ssid=" /etc/turbopi/network/wpa_supplicant-home.conf; then
+    echo "Error: Configuration file does not contain SSID" >&2
+    exit 14
+fi
 
 # Install systemd service
 echo ""

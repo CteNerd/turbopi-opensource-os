@@ -41,14 +41,16 @@ ExecStartPost=/bin/sh -c '\
   else \
     logger -t turbopi-home-wifi "WARNING: Wi-Fi not associated after $TIMEOUT seconds, running dhclient anyway"; \
   fi; \
-  /sbin/dhclient -v "${WIFI_INTERFACE}" || true \
+  if ! /sbin/dhclient "${WIFI_INTERFACE}" 2>/dev/null; then \
+    logger -t turbopi-home-wifi "ERROR: dhclient failed on ${WIFI_INTERFACE}"; \
+  fi \
 '
 
 # Cleanup on stop
 ExecStop=/bin/sh -c 'PID=$(cat /run/wpa_supplicant-home.pid 2>/dev/null) && [ -n "$PID" ] && [ "$(cat /proc/$PID/comm 2>/dev/null)" = "wpa_supplicant" ] && kill -TERM "$PID" 2>/dev/null || true'
 ExecStop=/bin/sh -c '\
   if pgrep -f "dhclient.*${WIFI_INTERFACE}" >/dev/null 2>&1; then \
-    if ! /sbin/dhclient -r ${WIFI_INTERFACE} 2>&1; then \
+    if ! /sbin/dhclient -r "${WIFI_INTERFACE}" 2>&1; then \
       logger -t turbopi-home-wifi "Failed to release DHCP lease on ${WIFI_INTERFACE}"; \
     fi; \
   else \
