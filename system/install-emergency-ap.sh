@@ -121,14 +121,24 @@ else
     FULL_MAC="000000000000"
 fi
 
-# Generate a strong, unique password using SHA256 hash of machine-id + MAC
-# Take first 20 characters of the hash to get a strong password
-UNIQUE_PASSWORD=$(echo -n "${MACHINE_ID}${FULL_MAC}turbopi-emergency-ap" | sha256sum | cut -c1-20)
+# Generate a strong, unique password using SHA256 hash of machine-id + MAC + salt
+# Extract only the hash (first field) to avoid fragility, then take first 20 characters
+UNIQUE_PASSWORD=$(echo -n "${MACHINE_ID}${FULL_MAC}turbopi-emergency-ap" | sha256sum | awk '{print $1}' | cut -c1-20)
 
 # Update the password in the config file
 sed -i "s/^wpa_passphrase=.*/wpa_passphrase=$UNIQUE_PASSWORD/g" /etc/turbopi/network/hostapd-emergency.conf
 
 echo "✓ Generated unique password for this device"
+echo
+echo "====================================================================="
+echo "EMERGENCY AP PASSWORD (RECORD THIS NOW!):"
+echo
+echo "    $UNIQUE_PASSWORD"
+echo
+echo "This password is required to connect to the TurboPi Emergency Access Point."
+echo "Record it securely. It will not be shown again if the install fails."
+echo "====================================================================="
+echo
 
 # Install systemd service
 echo "Installing systemd service..."

@@ -105,8 +105,9 @@ else
 fi
 
 if [ -n "$CONFIGURED_PASSWORD" ] && [ "$CONFIGURED_PASSWORD" != "PLACEHOLDER_WILL_BE_REPLACED_BY_INSTALL_SCRIPT" ]; then
-    log "  Password: $CONFIGURED_PASSWORD"
-    log "           ⚠️  IMPORTANT: Record this password securely!"
+    # Display password on console only (not in persistent logs for security)
+    echo "  Password: $CONFIGURED_PASSWORD"
+    echo "           WARNING: IMPORTANT: Record this password securely!"
 else
     log "  Password: Could not determine (check /etc/turbopi/network/hostapd-emergency.conf)"
 fi

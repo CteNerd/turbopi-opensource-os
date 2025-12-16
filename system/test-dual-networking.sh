@@ -109,7 +109,7 @@ test_emergency_ap_interface() {
     if ip link show wlan0 > /dev/null 2>&1; then
         test_pass "wlan0 interface exists"
         
-        if ip link show wlan0 | grep -qw "UP"; then
+        if ip link show wlan0 | grep -qw "state UP"; then
             test_pass "wlan0 interface is UP"
         else
             test_fail "wlan0 interface is UP" "Interface is DOWN"
@@ -193,7 +193,7 @@ test_home_wifi_interface() {
     if ip link show wlan1 > /dev/null 2>&1; then
         test_pass "wlan1 interface exists"
         
-        if ip link show wlan1 | grep -qw "UP"; then
+        if ip link show wlan1 | grep -qw "state UP"; then
             test_pass "wlan1 interface is UP"
             
             # Check if it has an IP address (DHCP assigned)

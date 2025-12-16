@@ -194,7 +194,7 @@ sudo systemctl start turbopi-emergency-ap.service
 ### Security Considerations
 
 - **Automatic Password Generation**: The installation script generates a unique, device-specific password
-  - Password is derived from machine-id and MAC address using SHA256
+  - Password is derived from machine-id, MAC address, and a fixed salt string ("turbopi-emergency-ap") using SHA256
   - Each device receives a strong, unique 20-character password
   - Password is displayed during installation and should be securely recorded
 - **SSID Customization**: Automatically configured during installation

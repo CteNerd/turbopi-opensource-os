@@ -3,6 +3,9 @@ Description=TurboPi First-Boot Setup
 After=network-pre.target
 Before=network.target
 DefaultDependencies=no
+# Only run this service if the first-boot flag file does NOT exist.
+# This prevents the service from running after the first successful boot,
+# ensuring one-time execution as designed.
 ConditionPathExists=!/etc/turbopi/.first-boot-complete
 
 [Service]

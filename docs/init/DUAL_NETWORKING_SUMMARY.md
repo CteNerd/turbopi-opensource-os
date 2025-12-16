@@ -314,7 +314,7 @@ sudo journalctl -u turbopi-home-wifi.service -f
 
 ✅ **SECURITY ENHANCEMENT**: The emergency AP automatically generates a unique password for each device.
 
-- Password derived from machine-id and MAC address using SHA256
+- Password derived from machine-id, MAC address, and a fixed salt string ("turbopi-emergency-ap") using SHA256
 - 20-character strong password per device
 - No shared default credentials
 - Password displayed during installation and stored in `/etc/turbopi/network/hostapd-emergency.conf`
