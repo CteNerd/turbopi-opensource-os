@@ -120,7 +120,6 @@ log "=== TurboPi First-Boot Setup Completed Successfully ==="
 
 # Remove log file after successful completion to avoid persisting any sensitive context
 # The systemd service outputs to console, so logs are available during execution via console
-# and can be viewed with: journalctl -u turbopi-first-boot
 rm -f "$LOG_FILE"
 
 exit 0
