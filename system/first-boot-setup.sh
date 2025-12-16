@@ -14,6 +14,8 @@ set -e
 TURBOPI_REPO_DIR="/opt/turbopi"
 SETUP_COMPLETE_FLAG="/etc/turbopi/.first-boot-complete"
 LOG_FILE="/var/log/turbopi-first-boot.log"
+# Short timeout for non-interactive first-boot setup
+INSTALL_PROMPT_TIMEOUT=5
 
 # Logging function
 log() {
@@ -57,7 +59,7 @@ cd "$TURBOPI_REPO_DIR"
 log "Installing Emergency Access Point..."
 if [ -f "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" ]; then
     # Run installation in non-interactive mode
-    if PROMPT_TIMEOUT=5 "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" >> "$LOG_FILE" 2>&1; then
+    if PROMPT_TIMEOUT="$INSTALL_PROMPT_TIMEOUT" "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" >> "$LOG_FILE" 2>&1; then
         log "Emergency AP installation completed successfully"
     else
         # Check if it failed due to missing wlan0 (might be on different hardware)

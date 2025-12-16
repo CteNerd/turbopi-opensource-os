@@ -2,6 +2,9 @@
 
 This document describes how to verify that the acceptance criteria for the Base OS Image & Dual Networking feature are met.
 
+> ⚠️ **CRITICAL SECURITY WARNING**  
+> The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) referenced in this document is for testing and initial setup only. This password is publicly documented and **MUST** be changed immediately after first connection. **Never use the default password in production.**
+
 ## Prerequisites
 
 - Raspberry Pi 3 or later with built-in Wi-Fi

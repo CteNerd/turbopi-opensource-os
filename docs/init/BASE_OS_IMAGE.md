@@ -2,6 +2,9 @@
 
 This document describes how to create a base OS image for TurboPi that boots with the emergency access point pre-configured.
 
+> ⚠️ **CRITICAL SECURITY WARNING**  
+> The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) is documented publicly and **MUST** be changed immediately after first connection. This default password is provided only for initial setup and is **NOT secure** for production use. See [Security Recommendations](#security-recommendations) section for instructions on changing the password.
+
 ## Overview
 
 The TurboPi base OS image is built on Raspberry Pi OS and includes:

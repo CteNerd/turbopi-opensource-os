@@ -4,6 +4,9 @@
 
 This document provides a summary of the dual networking implementation for TurboPi OpenSource OS, which enables the robot to be accessible via both an emergency access point and a home Wi-Fi connection.
 
+> ⚠️ **CRITICAL SECURITY WARNING**  
+> The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) is documented for setup purposes only and is **NOT secure**. This password **MUST** be changed immediately after installation. See [Security Considerations](#security-considerations) for instructions.
+
 ## Acceptance Criteria Status
 
 ### ✅ AC1: Fresh Flash Boots into Emergency AP
