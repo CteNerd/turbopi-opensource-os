@@ -176,10 +176,6 @@ sudo systemctl stop turbopi-home-wifi.service
 sudo systemctl start turbopi-emergency-ap.service
 ```
 
-## Dual Networking
-
-The recommended approach is to use a USB Wi-Fi adapter for home network connectivity while keeping the built-in Wi-Fi for the emergency AP. This ensures the recovery plane is always available.
-
 ### Security Considerations
 
 - **IMPORTANT**: The default password (`TurboPi-7f9d2b1c4e5a`) **MUST** be changed for production use

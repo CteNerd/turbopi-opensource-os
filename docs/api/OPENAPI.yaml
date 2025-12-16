@@ -78,6 +78,7 @@ paths:
       description: Returns status of home Wi-Fi and emergency AP
       responses:
         '200':
+          description: Current status of both network interfaces
           content:
             application/json:
               schema:
@@ -85,18 +86,36 @@ paths:
                 properties:
                   home_wifi:
                     type: object
+                    description: Status of home Wi-Fi client connection
                     properties:
-                      connected: { type: boolean }
-                      ssid: { type: string }
-                      ip_address: { type: string }
-                      interface: { type: string }
+                      connected:
+                        type: boolean
+                        description: Whether the robot is connected to home Wi-Fi
+                      ssid:
+                        type: string
+                        description: SSID of connected home network (empty if not connected)
+                      ip_address:
+                        type: string
+                        description: IP address assigned by home DHCP server (empty if not connected)
+                      interface:
+                        type: string
+                        description: Network interface used for home Wi-Fi (e.g., wlan1)
                   emergency_ap:
                     type: object
+                    description: Status of emergency access point
                     properties:
-                      active: { type: boolean }
-                      ssid: { type: string }
-                      ip_address: { type: string }
-                      interface: { type: string }
+                      active:
+                        type: boolean
+                        description: Whether the emergency AP is running
+                      ssid:
+                        type: string
+                        description: SSID of emergency AP
+                      ip_address:
+                        type: string
+                        description: Static IP of emergency AP (typically 192.168.50.1)
+                      interface:
+                        type: string
+                        description: Network interface used for emergency AP (typically wlan0)
 
   /network/wifi/configure:
     post:
@@ -142,17 +161,42 @@ paths:
                   status: { type: string }
                   message: { type: string }
         '400':
-          description: Invalid configuration
+          description: Invalid configuration (e.g., invalid SSID/password format)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  message: { type: string }
         '500':
-          description: Configuration failed
+          description: Configuration failed (e.g., service error, file write error)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  message: { type: string }
 
   /network/wifi/disconnect:
     post:
       summary: Disconnect from home Wi-Fi
-      description: Stops the home Wi-Fi client service
+      description: Stops the home Wi-Fi client service. No parameters required.
       responses:
         '200':
           description: Disconnected successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: Status of the operation (e.g., "disconnected")
+                  message:
+                    type: string
+                    description: Human-readable message about the disconnection
 
   /control/arm:
     post:

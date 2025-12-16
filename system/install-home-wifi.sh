@@ -36,7 +36,7 @@ PACKAGES_TO_INSTALL=""
 # wpasupplicant for Wi-Fi client, isc-dhcp-client for DHCP
 # Note: Using isc-dhcp-client (dhclient) which is standard on Raspberry Pi OS
 for pkg in wpasupplicant isc-dhcp-client; do
-    if ! dpkg -l | grep -q "^ii  $pkg"; then
+    if ! dpkg -l | grep -qw "^ii  $pkg"; then
         PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $pkg"
     fi
 done
@@ -48,7 +48,7 @@ if [ -n "$PACKAGES_TO_INSTALL" ]; then
         exit 3
     fi
     
-    if ! apt-get install -y $PACKAGES_TO_INSTALL; then
+    if ! apt-get install -y "$PACKAGES_TO_INSTALL"; then
         echo "Error: 'apt-get install' failed. Please check your network connection, package sources, and dependencies." >&2
         exit 4
     fi
@@ -75,7 +75,7 @@ echo ""
 # Check for non-interactive mode
 if [ -t 0 ]; then
     # Interactive mode - prompt for credentials
-    read -p "Enter your home Wi-Fi SSID: " WIFI_SSID
+    read -t 30 -p "Enter your home Wi-Fi SSID: " WIFI_SSID || WIFI_SSID=""
     
     # Validate SSID
     if [ -z "$WIFI_SSID" ]; then
@@ -84,7 +84,7 @@ if [ -t 0 ]; then
     fi
     
     # Read password securely
-    read -sp "Enter your home Wi-Fi password: " WIFI_PASSWORD
+    read -t 30 -sp "Enter your home Wi-Fi password: " WIFI_PASSWORD || WIFI_PASSWORD=""
     echo ""
     
     # Validate password (WPA2 requires 8-63 characters)
@@ -94,7 +94,7 @@ if [ -t 0 ]; then
     fi
     
     # Confirm password
-    read -sp "Confirm your home Wi-Fi password: " WIFI_PASSWORD_CONFIRM
+    read -t 30 -sp "Confirm your home Wi-Fi password: " WIFI_PASSWORD_CONFIRM || WIFI_PASSWORD_CONFIRM=""
     echo ""
     
     if [ "$WIFI_PASSWORD" != "$WIFI_PASSWORD_CONFIRM" ]; then
@@ -102,17 +102,27 @@ if [ -t 0 ]; then
         exit 7
     fi
     
-    # Update configuration file with credentials
+    # Update configuration file with credentials using wpa_passphrase
     echo "Updating configuration with your credentials..."
-    sed -i "s/YOUR_HOME_SSID/$WIFI_SSID/g" /etc/turbopi/network/wpa_supplicant-home.conf
-    sed -i "s/YOUR_HOME_PASSWORD/$WIFI_PASSWORD/g" /etc/turbopi/network/wpa_supplicant-home.conf
+    # Generate WPA-PSK config block using wpa_passphrase (handles special characters safely)
+    WPA_BLOCK=$(wpa_passphrase "$WIFI_SSID" "$WIFI_PASSWORD" | grep -v '^[[:space:]]*#psk=')
+    
+    # Replace the placeholder network block in the config file
+    # Use awk to safely replace the network block
+    awk -v block="$WPA_BLOCK" '
+        BEGIN {inblock=0}
+        /^network={/ {print block; inblock=1; next}
+        /^}/ && inblock {inblock=0; next}
+        !inblock
+    ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
+    mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
     
     # Optional: Prompt for interface
     echo ""
     echo "Which Wi-Fi interface should be used for home Wi-Fi?"
     echo "  wlan1 (recommended): Use USB Wi-Fi adapter, keep wlan0 for emergency AP"
     echo "  wlan0 (not recommended): Use built-in Wi-Fi, emergency AP will be disabled"
-    read -p "Enter interface [wlan1]: " WIFI_INTERFACE
+    read -t 30 -p "Enter interface [wlan1]: " WIFI_INTERFACE || WIFI_INTERFACE=""
     WIFI_INTERFACE="${WIFI_INTERFACE:-wlan1}"
 else
     # Non-interactive mode - credentials must be provided via environment variables
@@ -128,10 +138,20 @@ else
         exit 6
     fi
     
-    # Update configuration file with credentials from environment
+    # Update configuration file with credentials from environment using wpa_passphrase
     echo "Using credentials from environment variables..."
-    sed -i "s/YOUR_HOME_SSID/$WIFI_SSID/g" /etc/turbopi/network/wpa_supplicant-home.conf
-    sed -i "s/YOUR_HOME_PASSWORD/$WIFI_PASSWORD/g" /etc/turbopi/network/wpa_supplicant-home.conf
+    # Generate WPA-PSK config block using wpa_passphrase (handles special characters safely)
+    WPA_BLOCK=$(wpa_passphrase "$WIFI_SSID" "$WIFI_PASSWORD" | grep -v '^[[:space:]]*#psk=')
+    
+    # Replace the placeholder network block in the config file
+    # Use awk to safely replace the network block
+    awk -v block="$WPA_BLOCK" '
+        BEGIN {inblock=0}
+        /^network={/ {print block; inblock=1; next}
+        /^}/ && inblock {inblock=0; next}
+        !inblock
+    ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
+    mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
     
     WIFI_INTERFACE="${WIFI_INTERFACE:-wlan1}"
 fi
@@ -197,22 +217,43 @@ if [ "$WIFI_INTERFACE" = "wlan0" ]; then
     echo "  sudo systemctl stop turbopi-home-wifi.service"
     echo "  sudo systemctl start turbopi-emergency-ap.service"
     echo ""
-    read -p "Press Enter to continue or Ctrl+C to abort..."
+    if [ -t 0 ]; then
+        read -t 30 -p "Press Enter to continue or Ctrl+C to abort..." || true
+    else
+        echo "Non-interactive mode: Continuing without confirmation."
+    fi
 fi
 
 # Start the service
 echo "Starting service..."
 systemctl start turbopi-home-wifi.service
 
-# Wait for connection
+# Poll for service to become active (timeout configurable via SERVICE_START_TIMEOUT, default: 10 seconds)
+SERVICE_START_TIMEOUT="${SERVICE_START_TIMEOUT:-10}"
+echo -n "Waiting for service to start"
+service_started=0
+for ((i=1; i<=SERVICE_START_TIMEOUT; i++)); do
+    if systemctl is-active --quiet turbopi-home-wifi.service; then
+        echo ""
+        echo "✓ Service started successfully"
+        service_started=1
+        break
+    fi
+    echo -n "."
+    sleep 1
+done
 echo ""
-echo "Waiting for Wi-Fi connection..."
-sleep 5
 
-# Check service status
-SERVICE_STATUS=$(systemctl is-active turbopi-home-wifi.service || echo "inactive")
-if [ "$SERVICE_STATUS" = "active" ]; then
-    echo "✓ Service started successfully"
+# Check if service failed to start within timeout
+if [ "$service_started" -ne 1 ]; then
+    echo "⚠ Service did not become active within ${SERVICE_START_TIMEOUT} seconds." >&2
+    echo "  Check status: sudo systemctl status turbopi-home-wifi.service" >&2
+    echo "  Check logs: sudo journalctl -u turbopi-home-wifi.service" >&2
+else
+    # Wait a bit more for IP assignment (timeout configurable via CONNECTION_WAIT_TIMEOUT, default: 5 seconds)
+    CONNECTION_WAIT_TIMEOUT="${CONNECTION_WAIT_TIMEOUT:-5}"
+    echo "Waiting for Wi-Fi connection (${CONNECTION_WAIT_TIMEOUT}s)..."
+    sleep "$CONNECTION_WAIT_TIMEOUT"
     
     # Try to get IP address
     IP_ADDRESS=$(ip -4 addr show "$WIFI_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
@@ -225,10 +266,6 @@ if [ "$SERVICE_STATUS" = "active" ]; then
         echo "  Check status: sudo systemctl status turbopi-home-wifi.service"
         echo "  Check logs: sudo journalctl -u turbopi-home-wifi.service"
     fi
-else
-    echo "⚠ Service failed to start"
-    echo "  Check status: sudo systemctl status turbopi-home-wifi.service"
-    echo "  Check logs: sudo journalctl -u turbopi-home-wifi.service"
 fi
 
 echo ""

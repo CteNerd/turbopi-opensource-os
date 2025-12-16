@@ -113,7 +113,8 @@ else
     test_result "install script prompts for credentials" 1
 fi
 
-if grep -q "sed -i" "$SCRIPT_DIR/install-home-wifi.sh"; then
+if grep -q "wpa_passphrase" "$SCRIPT_DIR/install-home-wifi.sh" || \
+   grep -q "WPA_BLOCK" "$SCRIPT_DIR/install-home-wifi.sh"; then
     test_result "install script updates configuration" 0
 else
     test_result "install script updates configuration" 1

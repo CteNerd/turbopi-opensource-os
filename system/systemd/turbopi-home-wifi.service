@@ -25,14 +25,37 @@ ExecStartPre=/usr/local/bin/turbopi/setup-home-wifi.sh
 # -D: Driver (nl80211 is the standard Linux wireless driver)
 ExecStart=/sbin/wpa_supplicant -B -P /run/wpa_supplicant-home.pid -i ${WIFI_INTERFACE} -c /etc/turbopi/network/wpa_supplicant-home.conf -D nl80211
 
-# Request DHCP address after wpa_supplicant connects
-# Wait briefly for connection to establish before requesting DHCP
-# The 3-second delay allows wpa_supplicant to complete initial association
-ExecStartPost=/bin/sh -c 'sleep 3 && /sbin/dhclient -v ${WIFI_INTERFACE} || true'
+# Wait for wpa_supplicant to associate (wpa_state=COMPLETED) before requesting DHCP.
+# Polls up to 20 seconds (configurable via WIFI_CONNECT_TIMEOUT), then runs dhclient.
+ExecStartPost=/bin/sh -c '\
+  TIMEOUT="${WIFI_CONNECT_TIMEOUT:-20}"; \
+  for i in $(seq 1 "$TIMEOUT"); do \
+    STATE=$(wpa_cli -i "${WIFI_INTERFACE}" status 2>/dev/null | grep -w "^wpa_state" | cut -d= -f2); \
+    if [ "$STATE" = "COMPLETED" ]; then \
+      break; \
+    fi; \
+    sleep 1; \
+  done; \
+  if [ "$STATE" = "COMPLETED" ]; then \
+    logger -t turbopi-home-wifi "Wi-Fi associated after $i seconds, starting dhclient on ${WIFI_INTERFACE}"; \
+  else \
+    logger -t turbopi-home-wifi "WARNING: Wi-Fi not associated after $TIMEOUT seconds, running dhclient anyway"; \
+  fi; \
+  /sbin/dhclient -v "${WIFI_INTERFACE}" || true \
+'
 
 # Cleanup on stop
 ExecStop=/bin/sh -c 'PID=$(cat /run/wpa_supplicant-home.pid 2>/dev/null) && [ -n "$PID" ] && [ "$(cat /proc/$PID/comm 2>/dev/null)" = "wpa_supplicant" ] && kill -TERM "$PID" 2>/dev/null || true'
-ExecStop=/sbin/dhclient -r ${WIFI_INTERFACE} || true
+ExecStop=/bin/sh -c '\
+  if pgrep -f "dhclient.*${WIFI_INTERFACE}" >/dev/null 2>&1; then \
+    /sbin/dhclient -r ${WIFI_INTERFACE} 2>/tmp/dhclient_release.err || { \
+      logger -t turbopi-home-wifi "Failed to release DHCP lease on ${WIFI_INTERFACE}: $(cat /tmp/dhclient_release.err 2>/dev/null)"; \
+    }; \
+    rm -f /tmp/dhclient_release.err; \
+  else \
+    logger -t turbopi-home-wifi "No dhclient process found for ${WIFI_INTERFACE}, skipping DHCP release."; \
+  fi \
+'
 ExecStopPost=/bin/rm -f /run/wpa_supplicant-home.pid
 
 # Restart policy
