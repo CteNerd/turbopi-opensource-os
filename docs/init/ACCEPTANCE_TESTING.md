@@ -63,7 +63,7 @@ This document describes how to verify that the acceptance criteria for the Base 
    # Scan for Wi-Fi networks
    ```
    
-   **Expected Output**: Should see network named `TurboPi-Emergency-<MAC>` where `<MAC>` is the last 4 hex digits of the wlan0 MAC address
+   **Expected Output**: Should see network named `TurboPi-Emergency-<MAC>` where `<MAC>` is the last 4 hex digits after removing colons from the wlan0 MAC address (e.g., if MAC ends in ee:ff, use EEFF)
 
 7. **Connect to Emergency AP**
    - SSID: `TurboPi-Emergency-<MAC>`
