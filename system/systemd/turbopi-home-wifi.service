@@ -1,0 +1,43 @@
+[Unit]
+Description=TurboPi Home Wi-Fi Client
+After=network-pre.target turbopi-emergency-ap.service
+Before=network-online.target
+Wants=network-pre.target
+# Start after emergency AP to ensure recovery plane is established first
+DefaultDependencies=no
+
+[Service]
+Type=forking
+PIDFile=/run/wpa_supplicant-home.pid
+
+# Environment variable to specify which interface to use (default: wlan1)
+# Can be overridden via systemd override file or environment
+Environment="WIFI_INTERFACE=wlan1"
+
+# Setup the network interface
+ExecStartPre=/usr/local/bin/turbopi/setup-home-wifi.sh
+
+# Start wpa_supplicant for home Wi-Fi connection
+# -B: Run in background (daemon mode)
+# -P: Write PID file
+# -i: Interface to use
+# -c: Configuration file
+# -D: Driver (nl80211 is the standard Linux wireless driver)
+ExecStart=/sbin/wpa_supplicant -B -P /run/wpa_supplicant-home.pid -i ${WIFI_INTERFACE} -c /etc/turbopi/network/wpa_supplicant-home.conf -D nl80211
+
+# Request DHCP address after wpa_supplicant connects
+# Wait briefly for connection to establish before requesting DHCP
+ExecStartPost=/bin/sh -c 'sleep 2 && /sbin/dhclient -v ${WIFI_INTERFACE} || true'
+
+# Cleanup on stop
+ExecStop=/bin/sh -c 'PID=$(cat /run/wpa_supplicant-home.pid 2>/dev/null) && [ -n "$PID" ] && [ "$(cat /proc/$PID/comm 2>/dev/null)" = "wpa_supplicant" ] && kill -TERM "$PID" 2>/dev/null || true'
+ExecStop=/sbin/dhclient -r ${WIFI_INTERFACE} || true
+ExecStopPost=/bin/rm -f /run/wpa_supplicant-home.pid
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

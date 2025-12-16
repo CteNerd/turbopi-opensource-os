@@ -72,6 +72,88 @@ paths:
         '202':
           description: Update started
 
+  /network/wifi/status:
+    get:
+      summary: Get Wi-Fi connection status
+      description: Returns status of home Wi-Fi and emergency AP
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  home_wifi:
+                    type: object
+                    properties:
+                      connected: { type: boolean }
+                      ssid: { type: string }
+                      ip_address: { type: string }
+                      interface: { type: string }
+                  emergency_ap:
+                    type: object
+                    properties:
+                      active: { type: boolean }
+                      ssid: { type: string }
+                      ip_address: { type: string }
+                      interface: { type: string }
+
+  /network/wifi/configure:
+    post:
+      summary: Configure home Wi-Fi connection
+      description: >
+        Configure the robot to connect to a home Wi-Fi network.
+        Credentials are securely stored and persist across reboots.
+        Emergency AP remains active if using a separate interface.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ssid
+                - password
+              properties:
+                ssid:
+                  type: string
+                  description: Home Wi-Fi network SSID
+                  minLength: 1
+                  maxLength: 32
+                password:
+                  type: string
+                  description: WPA2 password (8-63 characters)
+                  minLength: 8
+                  maxLength: 63
+                  format: password
+                interface:
+                  type: string
+                  description: Wi-Fi interface to use (default wlan1)
+                  enum: [wlan0, wlan1]
+                  default: wlan1
+      responses:
+        '200':
+          description: Configuration saved, connecting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+        '400':
+          description: Invalid configuration
+        '500':
+          description: Configuration failed
+
+  /network/wifi/disconnect:
+    post:
+      summary: Disconnect from home Wi-Fi
+      description: Stops the home Wi-Fi client service
+      responses:
+        '200':
+          description: Disconnected successfully
+
   /control/arm:
     post:
       summary: Arm motors

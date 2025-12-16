@@ -102,14 +102,83 @@ Once the emergency AP is active:
 2. Open a web browser and navigate to `http://192.168.50.1:8080`
 3. For SSH access (development): `ssh pi@192.168.50.1`
 
-### Dual Networking
+### Home Wi-Fi Client
 
-The emergency AP runs on `wlan0` by default. For home Wi-Fi connectivity:
+The TurboPi system can connect to your home Wi-Fi network while keeping the emergency AP active.
 
-- Use a second Wi-Fi adapter on `wlan1`, or
-- Configure `wlan0` to connect to home Wi-Fi after initial setup (emergency AP will be disabled)
+### Recommended Configuration (Dual Wi-Fi)
 
-The recommended approach is to use a USB Wi-Fi adapter for home network connectivity while keeping the built-in Wi-Fi for the emergency AP.
+- **Built-in Wi-Fi (wlan0)**: Runs emergency AP on `192.168.50.x`
+- **USB Wi-Fi adapter (wlan1)**: Connects to home network via DHCP
+- Both networks active simultaneously for maximum reliability
+
+### Installation
+
+#### Automated Installation (Recommended)
+
+```bash
+cd system
+sudo ./install-home-wifi.sh
+```
+
+The script will:
+- Install required packages (wpasupplicant, dhcp client)
+- Prompt for your home Wi-Fi SSID and password
+- Configure the home Wi-Fi client service
+- Enable automatic connection on boot
+- Keep the emergency AP active on wlan0
+
+#### Non-Interactive Installation
+
+For automated deployments, provide credentials via environment variables:
+
+```bash
+cd system
+sudo WIFI_SSID="YourNetworkName" WIFI_PASSWORD="YourPassword" WIFI_INTERFACE="wlan1" ./install-home-wifi.sh
+```
+
+### Features
+
+- **Persistent Connection**: Automatically reconnects on boot
+- **Dual Access**: Robot accessible via both emergency AP (192.168.50.1) and home network IP
+- **Recovery Plane Preserved**: Emergency AP remains available if home Wi-Fi fails
+- **Secure**: Wi-Fi credentials stored in protected config file (600 permissions)
+
+### Accessing the Robot
+
+Once connected to home Wi-Fi:
+
+1. Find the robot's IP address:
+   ```bash
+   # On the robot
+   ip addr show wlan1 | grep 'inet '
+   
+   # Or check your router's DHCP client list
+   ```
+
+2. Access the web UI at `http://<robot-ip>:8080`
+
+3. Emergency AP remains accessible at `http://192.168.50.1:8080`
+
+### Single Wi-Fi Interface Mode
+
+If you don't have a USB Wi-Fi adapter, you can use wlan0 for home Wi-Fi:
+
+```bash
+cd system
+sudo WIFI_INTERFACE="wlan0" ./install-home-wifi.sh
+```
+
+**Warning**: This will disable the emergency AP. To restore emergency AP access:
+
+```bash
+sudo systemctl stop turbopi-home-wifi.service
+sudo systemctl start turbopi-emergency-ap.service
+```
+
+## Dual Networking
+
+The recommended approach is to use a USB Wi-Fi adapter for home network connectivity while keeping the built-in Wi-Fi for the emergency AP. This ensures the recovery plane is always available.
 
 ### Security Considerations
 
