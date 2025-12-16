@@ -31,6 +31,9 @@ if [ -f "$SETUP_COMPLETE_FLAG" ]; then
     exit 0
 fi
 
+# Start with fresh log on each run to prevent accumulation on retries
+: > "$LOG_FILE"
+
 log "=== TurboPi First-Boot Setup Starting ==="
 
 # Ensure we're running as root
@@ -82,8 +85,15 @@ date > "$SETUP_COMPLETE_FLAG"
 
 log "=== TurboPi First-Boot Setup Completed Successfully ==="
 log ""
+
+# Extract actual configured SSID from the installed config file
+CONFIGURED_SSID="TurboPi-Emergency-<MAC>"
+if [ -f "/etc/turbopi/network/hostapd-emergency.conf" ]; then
+    CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2 || echo "TurboPi-Emergency-<MAC>")
+fi
+
 log "Emergency Access Point Details:"
-log "  SSID: TurboPi-Emergency-<MAC>"
+log "  SSID: $CONFIGURED_SSID"
 log "  IP: 192.168.50.1"
 log "  Web UI: http://192.168.50.1:8080"
 log ""
