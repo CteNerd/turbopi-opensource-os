@@ -87,13 +87,19 @@ log "=== TurboPi First-Boot Setup Completed Successfully ==="
 log ""
 
 # Extract actual configured SSID from the installed config file
-CONFIGURED_SSID="TurboPi-Emergency-<MAC>"
+CONFIGURED_SSID=""
 if [ -f "/etc/turbopi/network/hostapd-emergency.conf" ]; then
-    CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2 || echo "TurboPi-Emergency-<MAC>")
+    CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf 2>/dev/null | cut -d'=' -f2)
 fi
 
+# Validate extracted SSID and log appropriate message
 log "Emergency Access Point Details:"
-log "  SSID: $CONFIGURED_SSID"
+if [ -n "$CONFIGURED_SSID" ] && [ "$CONFIGURED_SSID" != "TurboPi-Emergency-<MAC>" ]; then
+    log "  SSID: $CONFIGURED_SSID"
+else
+    log "  SSID: Could not determine (check /etc/turbopi/network/hostapd-emergency.conf)"
+    log "       Expected format: TurboPi-Emergency-<4-hex-digits>"
+fi
 log "  IP: 192.168.50.1"
 log "  Web UI: http://192.168.50.1:8080"
 log ""
