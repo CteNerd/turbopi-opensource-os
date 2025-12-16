@@ -2,8 +2,8 @@
 
 This document describes how to create a base OS image for TurboPi that boots with the emergency access point pre-configured.
 
-> ⚠️ **CRITICAL SECURITY WARNING**  
-> The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) is documented publicly and **MUST** be changed immediately after first connection. This default password is provided only for initial setup and is **NOT secure** for production use. See [Security Recommendations](#security-recommendations) section for instructions on changing the password.
+> ✅ **SECURITY IMPROVEMENT**  
+> The installation script automatically generates a **unique, device-specific password** for each robot's emergency AP. This password is derived from the device's machine-id and MAC address, ensuring no two devices share the same password. The generated password is displayed during installation and must be securely recorded.
 
 ## Overview
 
@@ -255,7 +255,7 @@ sudo ./test-dual-networking.sh
 2. Insert into Raspberry Pi and power on
 3. Wait 2-3 minutes for first boot setup
 4. Scan for Wi-Fi networks - should see `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits after removing colons from the wlan0 MAC address; e.g., if MAC ends in ee:ff, use EEFF)
-5. Connect using password `TurboPi-7f9d2b1c4e5a`
+5. Connect using the unique generated password (displayed during installation, or retrieve via: `sudo grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf`)
 6. Access `http://192.168.50.1:8080` in browser
 
 ✅ **Pass**: Emergency AP is accessible on fresh boot

@@ -104,6 +104,32 @@ else
     echo "You must manually edit /etc/turbopi/network/hostapd-emergency.conf before the AP will work." >&2
 fi
 
+# Generate unique per-device password for security
+# Use MAC address and machine-id to generate a deterministic but unique password
+echo "Generating unique per-device password..."
+if [ -f /etc/machine-id ]; then
+    MACHINE_ID=$(cat /etc/machine-id)
+else
+    # Fallback if machine-id doesn't exist (shouldn't happen on modern systems)
+    MACHINE_ID=$(cat /proc/sys/kernel/random/uuid | tr -d '-')
+fi
+
+# Get full MAC address for password generation
+if ip link show wlan0 > /dev/null 2>&1; then
+    FULL_MAC=$(ip link show wlan0 | grep 'link/ether' | awk '{print $2}' | tr -d ':')
+else
+    FULL_MAC="000000000000"
+fi
+
+# Generate a strong, unique password using SHA256 hash of machine-id + MAC
+# Take first 20 characters of the hash to get a strong password
+UNIQUE_PASSWORD=$(echo -n "${MACHINE_ID}${FULL_MAC}turbopi-emergency-ap" | sha256sum | cut -c1-20)
+
+# Update the password in the config file
+sed -i "s/^wpa_passphrase=.*/wpa_passphrase=$UNIQUE_PASSWORD/g" /etc/turbopi/network/hostapd-emergency.conf
+
+echo "✓ Generated unique password for this device"
+
 # Install systemd service
 echo "Installing systemd service..."
 cp "$SCRIPT_DIR/systemd/turbopi-emergency-ap.service" /etc/systemd/system/

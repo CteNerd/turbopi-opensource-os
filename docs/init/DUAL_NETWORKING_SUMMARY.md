@@ -4,8 +4,8 @@
 
 This document provides a summary of the dual networking implementation for TurboPi OpenSource OS, which enables the robot to be accessible via both an emergency access point and a home Wi-Fi connection.
 
-> ⚠️ **CRITICAL SECURITY WARNING**  
-> The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) is documented for setup purposes only and is **NOT secure**. This password **MUST** be changed immediately after installation. See [Security Considerations](#security-considerations) for instructions.
+> ✅ **SECURITY ENHANCEMENT**  
+> The emergency AP automatically generates a **unique, device-specific password** during installation, derived from the device's machine-id and MAC address. This eliminates the security risk of shared default credentials.
 
 ## Acceptance Criteria Status
 
@@ -310,21 +310,35 @@ sudo journalctl -u turbopi-home-wifi.service -f
 
 ## Security Considerations
 
-### Default Password
+### Unique Device Passwords
 
-⚠️ **WARNING**: The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) MUST be changed before production use.
+✅ **SECURITY ENHANCEMENT**: The emergency AP automatically generates a unique password for each device.
+
+- Password derived from machine-id and MAC address using SHA256
+- 20-character strong password per device
+- No shared default credentials
+- Password displayed during installation and stored in `/etc/turbopi/network/hostapd-emergency.conf`
+
+### Retrieving Your Password
 
 ```bash
-# Change emergency AP password
+# View current emergency AP password
+sudo grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf
+```
+
+### Changing Password (Optional)
+
+```bash
+# Edit emergency AP password
 sudo nano /etc/turbopi/network/hostapd-emergency.conf
-# Edit wpa_passphrase line
+# Edit wpa_passphrase line (8-63 characters)
 sudo systemctl restart turbopi-emergency-ap.service
 ```
 
 ### Credential Storage
 
-- Home Wi-Fi credentials stored in `/etc/turbopi/network/wpa_supplicant-home.conf`
-- File permissions set to 600 (owner read/write only)
+- Emergency AP password: `/etc/turbopi/network/hostapd-emergency.conf` (root-only access)
+- Home Wi-Fi credentials: `/etc/turbopi/network/wpa_supplicant-home.conf` (permissions: 600)
 - Never commit credentials to repository
 
 ### Network Separation

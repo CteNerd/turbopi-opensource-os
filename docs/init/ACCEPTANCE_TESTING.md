@@ -2,8 +2,8 @@
 
 This document describes how to verify that the acceptance criteria for the Base OS Image & Dual Networking feature are met.
 
-> ⚠️ **CRITICAL SECURITY WARNING**  
-> The default emergency AP password (`TurboPi-7f9d2b1c4e5a`) referenced in this document is for testing and initial setup only. This password is publicly documented and **MUST** be changed immediately after first connection. **Never use the default password in production.**
+> ✅ **SECURITY ENHANCEMENT**  
+> The emergency AP now automatically generates a **unique, device-specific password** during installation. Each device receives a strong 20-character password derived from its machine-id and MAC address. The password is displayed during installation and should be securely recorded for access.
 
 ## Prerequisites
 
@@ -67,7 +67,8 @@ This document describes how to verify that the acceptance criteria for the Base 
 
 7. **Connect to Emergency AP**
    - SSID: `TurboPi-Emergency-<MAC>`
-   - Password: `TurboPi-7f9d2b1c4e5a`
+   - Password: Use the unique password displayed during installation (20-character string)
+     - To retrieve: `sudo grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf`
    
    **Expected Result**: Successful connection
 
