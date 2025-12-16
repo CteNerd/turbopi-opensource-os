@@ -128,7 +128,7 @@ UNIQUE_PASSWORD=$(echo -n "${MACHINE_ID}${FULL_MAC}turbopi-emergency-ap" | sha25
 # Update the password in the config file
 sed -i "s/^wpa_passphrase=.*/wpa_passphrase=$UNIQUE_PASSWORD/g" /etc/turbopi/network/hostapd-emergency.conf
 
-echo "✓ Generated unique password for this device"
+echo "[OK] Generated unique password for this device"
 echo
 echo "====================================================================="
 echo "EMERGENCY AP PASSWORD (RECORD THIS NOW!):"

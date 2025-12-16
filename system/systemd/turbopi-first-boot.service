@@ -3,17 +3,17 @@ Description=TurboPi First-Boot Setup
 After=network-pre.target
 Before=network.target
 DefaultDependencies=no
-# Only run this service if the first-boot flag file does NOT exist.
-# This prevents the service from running after the first successful boot,
-# ensuring one-time execution as designed.
+# Only run on first boot. ConditionPathExists prevents execution after /etc/turbopi/.first-boot-complete is created, ensuring one-time execution.
 ConditionPathExists=!/etc/turbopi/.first-boot-complete
 
 [Service]
 Type=oneshot
 ExecStart=/opt/turbopi/system/first-boot-setup.sh
 RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
+# Output to console only to prevent password from being captured in systemd journal
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
 
 [Install]
 WantedBy=multi-user.target
