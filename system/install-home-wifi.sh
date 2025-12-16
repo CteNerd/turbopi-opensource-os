@@ -117,11 +117,22 @@ if [ -t 0 ]; then
     fi
     
     # Replace the placeholder network block in the config file
-    # Use awk to safely replace the network block
+    # Use awk to safely replace only the first network block (preserves additional networks)
     awk -v block="$WPA_BLOCK" '
-        BEGIN {inblock=0}
-        /^network={/ {print block; inblock=1; next}
-        /^}/ && inblock {inblock=0; next}
+        BEGIN {inblock=0; replaced=0}
+        /^network={/ {
+            if (!replaced) {
+                print block;
+                inblock=1;
+                replaced=1;
+                next;
+            } else {
+                inblock=1;
+                print;
+                next;
+            }
+        }
+        /^}/ && inblock {inblock=0; print; next}
         !inblock
     ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
     mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
@@ -168,11 +179,22 @@ else
     fi
     
     # Replace the placeholder network block in the config file
-    # Use awk to safely replace the network block
+    # Use awk to safely replace only the first network block (preserves additional networks)
     awk -v block="$WPA_BLOCK" '
-        BEGIN {inblock=0}
-        /^network={/ {print block; inblock=1; next}
-        /^}/ && inblock {inblock=0; next}
+        BEGIN {inblock=0; replaced=0}
+        /^network={/ {
+            if (!replaced) {
+                print block;
+                inblock=1;
+                replaced=1;
+                next;
+            } else {
+                inblock=1;
+                print;
+                next;
+            }
+        }
+        /^}/ && inblock {inblock=0; print; next}
         !inblock
     ' /etc/turbopi/network/wpa_supplicant-home.conf > /etc/turbopi/network/wpa_supplicant-home.conf.tmp
     mv /etc/turbopi/network/wpa_supplicant-home.conf.tmp /etc/turbopi/network/wpa_supplicant-home.conf
@@ -296,8 +318,8 @@ else
     echo "Waiting for Wi-Fi connection (${CONNECTION_WAIT_TIMEOUT}s)..."
     sleep "$CONNECTION_WAIT_TIMEOUT"
     
-    # Try to get IP address
-    IP_ADDRESS=$(ip -4 addr show "$WIFI_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+    # Try to get IP address (using portable awk instead of PCRE)
+    IP_ADDRESS=$(ip -4 addr show "$WIFI_INTERFACE" | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1 || echo "")
     if [ -n "$IP_ADDRESS" ]; then
         echo "✓ Connected to home Wi-Fi"
         echo "  IP Address: $IP_ADDRESS"
@@ -312,8 +334,12 @@ fi
 echo ""
 echo "=== Installation Complete ==="
 echo ""
+
+# Extract actual configured SSID from config file for accuracy
+CONFIGURED_SSID=$(grep -m1 'ssid=' /etc/turbopi/network/wpa_supplicant-home.conf | cut -d= -f2 | tr -d '"' || echo "$WIFI_SSID")
+
 echo "Home Wi-Fi Client Configuration:"
-echo "  SSID: $WIFI_SSID"
+echo "  SSID: $CONFIGURED_SSID"
 echo "  Interface: $WIFI_INTERFACE"
 if [ "$WIFI_INTERFACE" != "wlan0" ]; then
     echo "  Emergency AP: Active on wlan0 (192.168.50.1)"

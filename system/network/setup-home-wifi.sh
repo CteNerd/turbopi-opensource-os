@@ -20,7 +20,8 @@ if ! ip link show "$INTERFACE" > /dev/null 2>&1; then
 fi
 
 # Bring up the interface if it's down
-if ! ip link show "$INTERFACE" | grep -qw "state UP"; then
+# Check for UP state in the output (handles "state UP" and "UP,LOWER_UP" formats)
+if ! ip link show "$INTERFACE" | grep -q "state UP"; then
     echo "Bringing up interface $INTERFACE..."
     ip link set "$INTERFACE" up
 fi
