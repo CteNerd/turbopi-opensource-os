@@ -2,11 +2,11 @@
 # Integration test for TurboPi Dual Networking
 # This script validates that the acceptance criteria for dual networking are met
 #
-# Note: Using 'set -e' without pipefail because we want to continue testing
-# even if some commands fail, to provide a complete test report.
-# Each test is explicitly checked and results are tracked.
+# Note: Not using 'set -e' because we want to continue testing even if some
+# commands fail, to provide a complete test report. Each test is explicitly
+# checked and results are tracked.
 
-set -e
+set +e
 
 # Colors for output
 RED='\033[0;31m'

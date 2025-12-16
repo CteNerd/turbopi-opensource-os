@@ -14,8 +14,8 @@ set -e
 TURBOPI_REPO_DIR="/opt/turbopi"
 SETUP_COMPLETE_FLAG="/etc/turbopi/.first-boot-complete"
 LOG_FILE="/var/log/turbopi-first-boot.log"
-# Short timeout for non-interactive first-boot setup
-INSTALL_PROMPT_TIMEOUT=5
+# Short timeout for non-interactive first-boot setup (configurable via environment)
+INSTALL_PROMPT_TIMEOUT="${INSTALL_PROMPT_TIMEOUT:-5}"
 
 # Logging function
 log() {
