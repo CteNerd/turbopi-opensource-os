@@ -24,7 +24,7 @@ This document provides a summary of the dual networking implementation for Turbo
 1. On fresh installation, run `sudo ./install-emergency-ap.sh`
 2. Script installs hostapd and dnsmasq packages
 3. Configures wlan0 with static IP 192.168.50.1
-4. Creates SSID `TurboPi-Emergency-<MAC>` (MAC derived from wlan0)
+4. Creates SSID `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits of the wlan0 MAC address, after removing colons and using uppercase; e.g., if MAC ends in ee:ff, use EEFF)
 5. Enables systemd service for automatic startup on boot
 6. Service starts immediately and on every subsequent boot
 

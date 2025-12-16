@@ -66,7 +66,7 @@ sudo ./install-emergency-ap.sh
 The emergency AP will:
 - Install required packages (hostapd, dnsmasq)
 - Configure the access point on wlan0
-- Set SSID to `TurboPi-Emergency-<MAC>` (MAC derived from wlan0)
+- Set SSID to `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits of the wlan0 MAC address, after removing colons and using uppercase; e.g., if MAC ends in ee:ff, use EEFF)
 - Enable systemd service for automatic startup
 - Start immediately
 
@@ -254,7 +254,7 @@ sudo ./test-dual-networking.sh
 1. Flash the image to a fresh SD card
 2. Insert into Raspberry Pi and power on
 3. Wait 2-3 minutes for first boot setup
-4. Scan for Wi-Fi networks - should see `TurboPi-Emergency-<MAC>`
+4. Scan for Wi-Fi networks - should see `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits after removing colons from the wlan0 MAC address; e.g., if MAC ends in ee:ff, use EEFF)
 5. Connect using password `TurboPi-7f9d2b1c4e5a`
 6. Access `http://192.168.50.1:8080` in browser
 
