@@ -135,18 +135,29 @@ fi
 echo "Starting service..."
 systemctl start turbopi-emergency-ap.service
 
-# Poll for service to become active (up to 10 seconds)
+# Poll for service to become active (timeout configurable via SERVICE_START_TIMEOUT, default: 10 seconds)
+SERVICE_START_TIMEOUT="${SERVICE_START_TIMEOUT:-10}"
 echo -n "Waiting for service to start"
-for i in {1..10}; do
+service_started=0
+for ((i=1; i<=SERVICE_START_TIMEOUT; i++)); do
     if systemctl is-active --quiet turbopi-emergency-ap.service; then
         echo ""
         echo "Service started successfully."
+        service_started=1
         break
     fi
     echo -n "."
     sleep 1
 done
 echo ""
+
+# Check if service failed to start within timeout
+if [ "$service_started" -ne 1 ]; then
+    echo "WARNING: Service did not become active within ${SERVICE_START_TIMEOUT} seconds." >&2
+    echo "It may have failed to start. Check the service status and logs:" >&2
+    echo "  sudo systemctl status turbopi-emergency-ap.service" >&2
+    echo "  sudo journalctl -u turbopi-emergency-ap.service" >&2
+fi
 
 # Check service status
 echo ""
@@ -163,6 +174,13 @@ echo ""
 echo "The emergency AP is using a DEFAULT PASSWORD that MUST be changed"
 echo "immediately after first connection for production use!"
 echo ""
+
+# Verify config files are properly installed before extracting values
+if [ ! -f /etc/turbopi/network/hostapd-emergency.conf ]; then
+    echo "ERROR: Configuration file /etc/turbopi/network/hostapd-emergency.conf not found!" >&2
+    exit 1
+fi
+
 # Extract configured SSID and password from hostapd config
 CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2)
 CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf | cut -d'=' -f2)

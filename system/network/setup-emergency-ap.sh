@@ -20,7 +20,7 @@ if ! ip link show "$INTERFACE" > /dev/null 2>&1; then
 fi
 
 # Check if the interface is already configured with the desired IP and is up
-if ip addr show "$INTERFACE" | grep -q "${IP_ADDRESS}/${CIDR}" && ip link show "$INTERFACE" | grep -qw "state UP"; then
+if ip addr show "$INTERFACE" | grep -q "${IP_ADDRESS}/${CIDR}" && ip link show "$INTERFACE" | grep -q "state UP"; then
     echo "Interface $INTERFACE is already configured for the emergency AP. Skipping reconfiguration."
     ip addr show "$INTERFACE"
     exit 0

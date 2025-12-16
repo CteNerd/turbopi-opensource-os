@@ -79,15 +79,26 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
   - Add timeouts to `read` commands: use `read -t 30` to prevent hanging in CI/automated deployments
   - Provide sensible defaults or fail fast with clear errors in non-interactive mode
 - String extraction pitfalls:
-  - When extracting MAC address suffixes, be precise: for last 4 hex digits from `aa:bb:cc:dd:ee:ff`, use `tr -d ':' | tr '[:lower:]' '[:upper:]' | tail -c 5 | head -c 4` to get `EEFF` (not `DDEEFF`)
+  - When extracting MAC address suffixes, be precise: for last 4 hex digits from `aa:bb:cc:dd:ee:ff`, use `tr -d ':' | tr '[:lower:]' '[:upper:]' | tail -c 5 | head -c 4` to get `EEFF`
   - `tail -c N` includes the newline in the count; for 4 chars use `tail -c 5 | head -c 4`
   - Test extraction logic with sample inputs before deployment
 - Service management:
   - For systemd `Type=forking`, background daemons started in ExecStartPost must use `--daemon` flag to fork properly
   - Verify processes before sending kill signals: check `/proc/$PID/comm` to prevent PID recycling issues
   - Use polling loops with timeouts instead of hardcoded sleeps when waiting for services
+  - Make service startup timeouts configurable via environment variables (e.g., `SERVICE_START_TIMEOUT`)
+  - Always verify service is active after polling timeout and provide clear troubleshooting commands
 - Documentation consistency:
   - When describing MAC address formats or other technical identifiers in multiple places, use consistent precise language
   - For MAC suffixes: always specify "last 4 hex digits after removing colons" with concrete example (e.g., `EEFF` from `aa:bb:cc:dd:ee:ff`)
   - Avoid ambiguous phrases like "last 4 characters" which could mean characters with colons or without
   - Update all documentation locations (README, docs/init, etc.) when clarifying technical details
+  - Keep numbered steps sequential without duplicates; verify step numbering when adding/removing steps
+- Privacy and logging:
+  - Disable privacy-sensitive logging by default (DNS queries, DHCP transactions logging MAC addresses/hostnames)
+  - Add comments explaining how to enable for troubleshooting
+  - Balance debugging needs with privacy concerns
+- Configuration extraction and validation:
+  - Extract and validate configuration values (passwords, SSIDs) before service startup when possible
+  - Check config files exist before extraction to provide better error messages
+  - Validate extracted values meet requirements before displaying to users

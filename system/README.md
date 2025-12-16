@@ -89,7 +89,7 @@ The script will:
    sudo systemctl start turbopi-emergency-ap.service
    ```
 
-5. Verify the service is running:
+6. Verify the service is running:
    ```bash
    sudo systemctl status turbopi-emergency-ap.service
    ```
