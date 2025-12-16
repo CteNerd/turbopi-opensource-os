@@ -3,7 +3,7 @@ Description=TurboPi First-Boot Setup
 After=network-pre.target
 Before=network.target
 DefaultDependencies=no
-# Only run on first boot. ConditionPathExists prevents execution after /etc/turbopi/.first-boot-complete is created, ensuring one-time execution.
+# Only run on first boot. The ConditionPathExists directive prevents execution after the completion flag is created.
 ConditionPathExists=!/etc/turbopi/.first-boot-complete
 
 [Service]

@@ -35,7 +35,7 @@ log_error() {
 # Test result tracking
 test_pass() {
     local test_name="$1"
-    echo -e "  ${GREEN}✓${NC} $test_name"
+    echo -e "  ${GREEN}[PASS]${NC} $test_name"
     ((TESTS_PASSED++))
     ((TESTS_RUN++))
 }
@@ -43,7 +43,7 @@ test_pass() {
 test_fail() {
     local test_name="$1"
     local reason="$2"
-    echo -e "  ${RED}✗${NC} $test_name"
+    echo -e "  ${RED}[FAIL]${NC} $test_name"
     if [ -n "$reason" ]; then
         echo "    Reason: $reason"
     fi
@@ -266,20 +266,20 @@ test_acceptance_criteria() {
     
     local ac1_pass=true
     if ! systemctl is-enabled turbopi-emergency-ap.service > /dev/null 2>&1; then
-        echo -e "  ${RED}✗ FAIL${NC}: Emergency AP service not enabled"
+        echo -e "  ${RED}[FAIL]${NC}: Emergency AP service not enabled"
         ac1_pass=false
     fi
     if ! systemctl is-active turbopi-emergency-ap.service > /dev/null 2>&1; then
-        echo -e "  ${RED}✗ FAIL${NC}: Emergency AP service not running"
+        echo -e "  ${RED}[FAIL]${NC}: Emergency AP service not running"
         ac1_pass=false
     fi
     if ! ip addr show wlan0 | grep -q "192.168.50.1" 2>/dev/null; then
-        echo -e "  ${RED}✗ FAIL${NC}: wlan0 not configured with 192.168.50.1"
+        echo -e "  ${RED}[FAIL]${NC}: wlan0 not configured with 192.168.50.1"
         ac1_pass=false
     fi
     
     if $ac1_pass; then
-        echo -e "  ${GREEN}✓ PASS${NC}: System configured to boot into emergency AP"
+        echo -e "  ${GREEN}[PASS]${NC}: System configured to boot into emergency AP"
     fi
     echo ""
     
@@ -294,18 +294,18 @@ test_acceptance_criteria() {
     if systemctl is-active turbopi-home-wifi.service > /dev/null 2>&1; then
         if systemctl is-active turbopi-emergency-ap.service > /dev/null 2>&1; then
             if ip link show wlan0 > /dev/null 2>&1 && ip link show wlan1 > /dev/null 2>&1; then
-                echo -e "  ${GREEN}✓ PASS${NC}: Dual networking configured and active"
+                echo -e "  ${GREEN}[PASS]${NC}: Dual networking configured and active"
                 ac2_status="PASS"
             else
-                echo -e "  ${YELLOW}⚠ PARTIAL${NC}: Services running but interfaces not both active"
+                echo -e "  ${YELLOW}[PARTIAL]${NC}: Services running but interfaces not both active"
                 ac2_status="PARTIAL"
             fi
         else
-            echo -e "  ${RED}✗ FAIL${NC}: Emergency AP not running while home Wi-Fi is active"
+            echo -e "  ${RED}[FAIL]${NC}: Emergency AP not running while home Wi-Fi is active"
             ac2_status="FAIL"
         fi
     else
-        echo -e "  ${YELLOW}⚠ SKIP${NC}: Home Wi-Fi not configured (install-home-wifi.sh not run)"
+        echo -e "  ${YELLOW}[SKIP]${NC}: Home Wi-Fi not configured (install-home-wifi.sh not run)"
     fi
     echo ""
     
@@ -318,18 +318,18 @@ test_acceptance_criteria() {
     
     local ac3_pass=true
     if ! systemctl is-enabled turbopi-emergency-ap.service > /dev/null 2>&1; then
-        echo -e "  ${RED}✗ FAIL${NC}: Emergency AP service not enabled for boot"
+        echo -e "  ${RED}[FAIL]${NC}: Emergency AP service not enabled for boot"
         ac3_pass=false
     fi
     
     if [ -f "/etc/systemd/system/turbopi-home-wifi.service" ]; then
         if ! systemctl is-enabled turbopi-home-wifi.service > /dev/null 2>&1; then
-            echo -e "  ${YELLOW}⚠ WARN${NC}: Home Wi-Fi service exists but not enabled"
+            echo -e "  ${YELLOW}[WARN]${NC}: Home Wi-Fi service exists but not enabled"
         fi
     fi
     
     if $ac3_pass; then
-        echo -e "  ${GREEN}✓ PASS${NC}: Networking configured to persist across reboot"
+        echo -e "  ${GREEN}[PASS]${NC}: Networking configured to persist across reboot"
     fi
     echo ""
 }
@@ -389,10 +389,10 @@ main() {
     echo ""
     
     if [ $TESTS_FAILED -eq 0 ]; then
-        echo -e "${GREEN}✓ All tests passed!${NC}"
+        echo -e "${GREEN}[SUCCESS] All tests passed!${NC}"
         exit 0
     else
-        echo -e "${RED}✗ Some tests failed${NC}"
+        echo -e "${RED}[FAILED] Some tests failed${NC}"
         exit 1
     fi
 }

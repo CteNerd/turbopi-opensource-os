@@ -1,12 +1,10 @@
 #!/bin/bash
 # First-boot setup script for TurboPi OpenSource OS
-# This script runs automatically on first boot to initialize the emergency AP
-# and prepare the system for operation.
+# This script runs automatically on first boot via systemd service (turbopi-first-boot.service)
+# to initialize the emergency AP and prepare the system for operation.
 #
-# Usage:
-#   1. Copy this script to /boot/turbopi-first-boot.sh (or /boot/firmware/turbopi-first-boot.sh on newer Pi OS)
-#   2. Add execution hook to /etc/rc.local or create systemd service
-#   3. Script will run once and remove itself after successful completion
+# The systemd service ensures one-time execution using ConditionPathExists.
+# After successful completion, the script creates a flag file to prevent re-execution.
 
 set -e
 
@@ -72,6 +70,8 @@ if [ -f "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" ]; then
             exit 1
         else
             log "WARNING: wlan0 not found. Emergency AP not installed."
+            log "Skipping first-boot setup completion flag - will retry on next boot"
+            exit 1
         fi
     fi
 else
@@ -103,6 +103,8 @@ if [ -n "$CONFIGURED_PASSWORD" ] && [ "$CONFIGURED_PASSWORD" != "PLACEHOLDER_WIL
     echo "           WARNING: IMPORTANT: Record this password securely!"
 else
     log "  Password: Could not determine (check /etc/turbopi/network/hostapd-emergency.conf)"
+    log "ERROR: Failed to extract valid password from config file"
+    exit 1
 fi
 
 log "  IP: 192.168.50.1"
@@ -120,7 +122,7 @@ date > "$SETUP_COMPLETE_FLAG"
 log "=== TurboPi First-Boot Setup Completed Successfully ==="
 
 # Remove log file after successful completion to avoid persisting any sensitive context
-# The systemd service outputs to console, so logs are available during execution via console
+# The systemd service outputs to console, so logs are available during execution
 rm -f "$LOG_FILE"
 
 exit 0

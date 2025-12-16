@@ -126,7 +126,13 @@ fi
 UNIQUE_PASSWORD=$(echo -n "${MACHINE_ID}${FULL_MAC}turbopi-emergency-ap" | sha256sum | awk '{print $1}' | cut -c1-20)
 
 # Update the password in the config file
-sed -i "s/^wpa_passphrase=.*/wpa_passphrase=$UNIQUE_PASSWORD/g" /etc/turbopi/network/hostapd-emergency.conf
+sed -i "s/^wpa_passphrase=.*/wpa_passphrase=$UNIQUE_PASSWORD/" /etc/turbopi/network/hostapd-emergency.conf
+
+# Verify the password was written correctly
+if ! grep -q "^wpa_passphrase=$UNIQUE_PASSWORD$" /etc/turbopi/network/hostapd-emergency.conf; then
+    echo "ERROR: Failed to update password in hostapd-emergency.conf"
+    exit 1
+fi
 
 echo "[OK] Generated unique password for this device"
 echo
