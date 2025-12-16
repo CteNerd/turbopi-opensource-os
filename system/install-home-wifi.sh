@@ -119,12 +119,13 @@ if [ -t 0 ]; then
     # Replace the placeholder network block in the config file
     # Use awk to safely replace only the first network block (preserves additional networks)
     awk -v block="$WPA_BLOCK" '
-        BEGIN {inblock=0; replaced=0}
+        BEGIN {inblock=0; replaced=0; skip_close=0}
         /^network={/ {
             if (!replaced) {
                 print block;
                 inblock=1;
                 replaced=1;
+                skip_close=1;
                 next;
             } else {
                 inblock=1;
@@ -134,9 +135,9 @@ if [ -t 0 ]; then
         }
         /^}/ && inblock {
             inblock=0;
-            if (replaced) {
+            if (skip_close) {
                 # Skip closing brace of replaced block (already in WPA_BLOCK)
-                replaced=0;
+                skip_close=0;
                 next;
             } else {
                 print;
@@ -191,12 +192,13 @@ else
     # Replace the placeholder network block in the config file
     # Use awk to safely replace only the first network block (preserves additional networks)
     awk -v block="$WPA_BLOCK" '
-        BEGIN {inblock=0; replaced=0}
+        BEGIN {inblock=0; replaced=0; skip_close=0}
         /^network={/ {
             if (!replaced) {
                 print block;
                 inblock=1;
                 replaced=1;
+                skip_close=1;
                 next;
             } else {
                 inblock=1;
@@ -206,9 +208,9 @@ else
         }
         /^}/ && inblock {
             inblock=0;
-            if (replaced) {
+            if (skip_close) {
                 # Skip closing brace of replaced block (already in WPA_BLOCK)
-                replaced=0;
+                skip_close=0;
                 next;
             } else {
                 print;
