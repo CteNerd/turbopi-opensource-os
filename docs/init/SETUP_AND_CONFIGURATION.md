@@ -38,17 +38,44 @@ The emergency AP is implemented using:
 - `systemd` service for automatic startup
 - See `/system/README.md` for installation instructions
 
-### Dual Networking Options
+### Home Wi-Fi Connection
+
+The robot can connect to your home Wi-Fi network while keeping the emergency AP available for recovery.
+
+**Automated Setup (Recommended)**
+
+```bash
+cd system
+sudo ./install-home-wifi.sh
+```
+
+This script will:
+- Prompt for your home Wi-Fi SSID and password
+- Configure automatic connection on boot
+- Keep the emergency AP active (if using USB Wi-Fi adapter)
+
+**Dual Networking Options**
 
 **Option 1: USB Wi-Fi Adapter (Recommended)**
-- Built-in Wi-Fi (`wlan0`) runs emergency AP
-- USB Wi-Fi adapter (`wlan1`) connects to home network
+- Built-in Wi-Fi (`wlan0`) runs emergency AP at `192.168.50.1`
+- USB Wi-Fi adapter (`wlan1`) connects to home network via DHCP
 - Both networks active simultaneously
+- Robot accessible via both IPs
+- Emergency AP always available for recovery
 
 **Option 2: Single Wi-Fi Interface**
-- Emergency AP active by default
-- Can be disabled after connecting to home Wi-Fi
-- User must re-enable AP for recovery if home network fails
+- Use `wlan0` for home Wi-Fi (disables emergency AP)
+- Set `WIFI_INTERFACE=wlan0` during installation
+- Emergency AP must be manually re-enabled if home network fails
+- Not recommended for production use
+
+### Network Persistence
+
+Once configured, the home Wi-Fi connection:
+- Persists across reboots (systemd service auto-starts)
+- Automatically reconnects if connection drops
+- Does not interfere with emergency AP (when using separate interface)
+- Uses DHCP for automatic IP assignment
 
 ## Configuration Rules
 
