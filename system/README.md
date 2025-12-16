@@ -80,7 +80,7 @@ The script will:
      ```
    - Change the line `ssid=TurboPi-Emergency-<MAC>` to use your MAC suffix.  
      For example: `ssid=TurboPi-Emergency-EEFF`
-4. Install and enable the systemd service (run from repository root):
+5. Install and enable the systemd service (run from repository root):
    ```bash
    # Run these commands from the repository root directory
    sudo cp system/systemd/turbopi-emergency-ap.service /etc/systemd/system/
