@@ -74,7 +74,7 @@ All services load configuration from `/etc/turbopi/config.env` via systemd's `En
 
 ### Configuration File Location
 - **Path**: `/etc/turbopi/config.env`
-- **Permissions**: `644` (readable by all, writable by root)
+- **Permissions**: `640` (readable by root and turbopi group, writable by root)
 - **Format**: Shell environment variable format
 
 ### Key Configuration Variables

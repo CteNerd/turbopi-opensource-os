@@ -48,7 +48,7 @@ This document provides acceptance testing procedures for the Runtime Service Ske
    ```bash
    ls -la /etc/turbopi/config.env
    ```
-   **Expected**: File exists with 644 permissions
+   **Expected**: File exists with 640 permissions (root:turbopi, group read-only)
 
 2. Verify content:
    ```bash
@@ -344,7 +344,7 @@ If configuration changes don't take effect:
 
 1. Verify config file format (no syntax errors)
 2. Restart services after config changes
-3. Check file permissions (should be 644)
+3. Check file permissions (should be 640, owner root:turbopi, group read-only)
 4. Verify systemd EnvironmentFile directive in service files
 
 ---
