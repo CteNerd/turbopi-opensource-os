@@ -153,10 +153,10 @@ Each release directory contains a `metadata.json` file with release information:
 ```json
 {
   "version": "0.1.0",
-  "release_date": "2025-12-17T00:00:00Z",
+  "release_date": "YYYY-MM-DDTHH:MM:SSZ",
   "checksum": "sha256:abc123...",
   "signature": "-----BEGIN PGP SIGNATURE-----...",
-  "install_date": "2025-12-17T10:30:00Z",
+  "install_date": "YYYY-MM-DDTHH:MM:SSZ",
   "source_url": "https://github.com/CteNerd/turbopi-opensource-os/releases/download/v0.1.0/turbopi-0.1.0.tar.gz",
   "requires_reboot": false,
   "health_check_passed": true
