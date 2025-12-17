@@ -82,7 +82,8 @@ fi
 echo "Setting permissions..."
 chown -R turbopi:turbopi /opt/turbopi
 chown -R turbopi:turbopi /var/log/turbopi
-chmod 644 /etc/turbopi/config.env
+chown root:turbopi /etc/turbopi/config.env
+chmod 640 /etc/turbopi/config.env
 
 # Install systemd service files
 echo "Installing systemd services..."
