@@ -331,11 +331,23 @@ if [ ! -e /opt/turbopi/current ]; then
     exit 1
 fi
 
+# Check if already migrated (current is a symlink)
+if [ -L /opt/turbopi/current ]; then
+    echo "Already migrated: /opt/turbopi/current is a symlink"
+    exit 0
+fi
+
 # Backup current installation
 CURRENT_VERSION=$(grep '^VERSION=' /etc/turbopi/config.env | cut -d= -f2 | tr -d '"' | xargs)
 
 if [ -z "$CURRENT_VERSION" ]; then
     echo "Error: VERSION not found in config.env"
+    exit 1
+fi
+
+# Validate version format (alphanumeric, dots, hyphens only)
+if ! echo "$CURRENT_VERSION" | grep -qE '^[a-zA-Z0-9.-]+$'; then
+    echo "Error: Invalid version format: $CURRENT_VERSION"
     exit 1
 fi
 
