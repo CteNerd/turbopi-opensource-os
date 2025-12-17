@@ -128,7 +128,7 @@ TIMEOUT=${SERVICE_START_TIMEOUT:-2}
 sleep "$TIMEOUT"
 
 # Check if API is running
-if kill -0 $API_PID 2>/dev/null; then
+if kill -0 "$API_PID" 2>/dev/null; then
     pass_test "API service started (PID: $API_PID)"
     
     # Test health endpoint
@@ -156,9 +156,9 @@ if kill -0 $API_PID 2>/dev/null; then
     fi
     
     # Stop API service (verify PID exists first)
-    if kill -0 $API_PID 2>/dev/null; then
-        kill $API_PID 2>/dev/null || true
-        wait $API_PID 2>/dev/null || true
+    if kill -0 "$API_PID" 2>/dev/null; then
+        kill "$API_PID" 2>/dev/null || true
+        wait "$API_PID" 2>/dev/null || true
     fi
 else
     fail_test "API service failed to start"
@@ -172,7 +172,7 @@ UI_PID=$!
 sleep "$TIMEOUT"
 
 # Check if UI is running
-if kill -0 $UI_PID 2>/dev/null; then
+if kill -0 "$UI_PID" 2>/dev/null; then
     pass_test "UI service started (PID: $UI_PID)"
     
     # Test UI endpoint
@@ -191,9 +191,9 @@ if kill -0 $UI_PID 2>/dev/null; then
     fi
     
     # Stop UI service (verify PID exists first)
-    if kill -0 $UI_PID 2>/dev/null; then
-        kill $UI_PID 2>/dev/null || true
-        wait $UI_PID 2>/dev/null || true
+    if kill -0 "$UI_PID" 2>/dev/null; then
+        kill "$UI_PID" 2>/dev/null || true
+        wait "$UI_PID" 2>/dev/null || true
     fi
 else
     fail_test "UI service failed to start"
@@ -224,9 +224,9 @@ else
 fi
 
 # Stop updater if still running (verify PID exists first)
-if kill -0 $UPDATER_PID 2>/dev/null; then
-    kill $UPDATER_PID 2>/dev/null || true
-    wait $UPDATER_PID 2>/dev/null || true
+if kill -0 "$UPDATER_PID" 2>/dev/null; then
+    kill "$UPDATER_PID" 2>/dev/null || true
+    wait "$UPDATER_PID" 2>/dev/null || true
 fi
 
 # Clean up
