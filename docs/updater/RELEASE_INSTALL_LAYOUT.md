@@ -248,13 +248,15 @@ This ensures services automatically use the new version after symlink swap.
 ```bash
 /opt/turbopi/                     # root:root 755
 /opt/turbopi/releases/            # root:root 755
-/opt/turbopi/releases/<version>/  # root:root 755 (read-only to prevent privilege escalation)
+/opt/turbopi/releases/<version>/  # root:root 755 (read-only for unprivileged users to prevent privilege escalation)
 /opt/turbopi/current              # root:root (symlink - permissions from target)
 /opt/turbopi/previous             # root:root (symlink - permissions from target)
 /opt/turbopi/downloads/           # root:root 700
 ```
 
 **Security Note**: Release directories must be owned by `root:root` and not writable by unprivileged users. Since the updater service runs as root and executes code from these directories, making them writable by the `turbopi` user would allow privilege escalation if that account were compromised. The API and UI services run as the unprivileged `turbopi` user and only need read access to the release directories.
+
+**Implementation Status**: The current `system/install-services.sh` script (line 83) sets ownership to `turbopi:turbopi` for backward compatibility. This security enhancement will be implemented in a future update as part of the updater engine implementation. Existing installations can migrate by running `sudo chown -R root:root /opt/turbopi/releases/` after ensuring the updater service is configured to run as root.
 
 ### Initial Installation
 
@@ -270,13 +272,13 @@ mkdir -p /opt/turbopi/downloads
 # Copy initial installation
 cp -r /path/to/repo/src/* /opt/turbopi/releases/0.1.0-dev/
 
+# Set permissions (root-owned for security - must be done before creating symlinks)
+chown -R root:root /opt/turbopi/releases/0.1.0-dev
+chmod -R 755 /opt/turbopi/releases/0.1.0-dev
+
 # Create initial symlinks
 ln -sfn /opt/turbopi/releases/0.1.0-dev /opt/turbopi/current
 ln -sfn /opt/turbopi/releases/0.1.0-dev /opt/turbopi/previous
-
-# Set permissions (root-owned for security)
-chown -R root:root /opt/turbopi/releases/0.1.0-dev
-chmod -R 755 /opt/turbopi/releases/0.1.0-dev
 ```
 
 ## Update Protocol Integration
@@ -316,10 +318,33 @@ The current installation uses `/opt/turbopi/current/` directly. Migration to ver
 #!/bin/bash
 # Migrate from direct current/ to versioned releases layout
 
+set -e  # Exit on error
+
+# Validate prerequisites
+if [ ! -f /etc/turbopi/config.env ]; then
+    echo "Error: /etc/turbopi/config.env not found"
+    exit 1
+fi
+
+if [ ! -d /opt/turbopi/current ]; then
+    echo "Error: /opt/turbopi/current directory not found"
+    exit 1
+fi
+
 # Backup current installation
 CURRENT_VERSION=$(grep VERSION /etc/turbopi/config.env | cut -d= -f2)
+
+if [ -z "$CURRENT_VERSION" ]; then
+    echo "Error: VERSION not found in config.env"
+    exit 1
+fi
+
 mkdir -p /opt/turbopi/releases
 mv /opt/turbopi/current /opt/turbopi/releases/${CURRENT_VERSION}
+
+# Set secure permissions (root-owned to prevent privilege escalation)
+chown -R root:root /opt/turbopi/releases/${CURRENT_VERSION}
+chmod -R 755 /opt/turbopi/releases/${CURRENT_VERSION}
 
 # Create symlinks
 ln -sfn /opt/turbopi/releases/${CURRENT_VERSION} /opt/turbopi/current
@@ -334,6 +359,8 @@ cat > /opt/turbopi/releases/${CURRENT_VERSION}/metadata.json << EOF
   "health_check_passed": true
 }
 EOF
+
+echo "Migration complete: /opt/turbopi/current -> /opt/turbopi/releases/${CURRENT_VERSION}"
 ```
 
 This migration is non-breaking - services continue to work via the `current` symlink.
