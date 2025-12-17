@@ -24,6 +24,7 @@ paths:
                   uptime: { type: number }
                   cpu_temp: { type: number }
                   version: { type: string }
+                  timestamp: { type: string, format: date-time }
 
   /system/version:
     get:

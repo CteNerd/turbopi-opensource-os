@@ -9,7 +9,6 @@ This is a minimal skeleton implementation that provides:
 """
 
 import os
-import sys
 import time
 import signal
 
@@ -37,14 +36,19 @@ class UpdaterService:
         print(f"Robot Name: {self.robot_name}")
         print(f"Auto Update: {self.auto_update}")
         print(f"Service running in background mode...")
+        print(f"Updater service: READY - waiting for update requests")
 
         # Main service loop - runs indefinitely until shutdown
+        check_count = 0
         while self.running:
             # In the skeleton, we just sleep
             # Full implementation will check for updates, manage installations, etc.
             time.sleep(60)  # Check every minute
+            check_count += 1
+            if check_count % 10 == 0:  # Log every 10 minutes
+                print(f"Updater service: RUNNING - check #{check_count} completed")
 
-        print("Updater service stopped.")
+        print("Updater service: STOPPED")
 
 
 def main():

@@ -79,15 +79,16 @@ done
 echo ""
 echo "Test 5: Health endpoint availability"
 if systemctl is-active turbopi-api.service > /dev/null 2>&1; then
-    # Wait a moment for service to be ready
-    sleep 2
+    # Wait for service to be ready (configurable timeout)
+    TIMEOUT=${SERVICE_START_TIMEOUT:-2}
+    sleep "$TIMEOUT"
     
     if curl -s -f http://localhost:8080/health > /dev/null 2>&1; then
         pass_test "Health endpoint responds"
         
         # Check response content
         HEALTH_RESPONSE=$(curl -s http://localhost:8080/health)
-        if echo "$HEALTH_RESPONSE" | grep -q '"status"'; then
+        if echo "$HEALTH_RESPONSE" | grep -q "\"status\""; then
             pass_test "Health endpoint returns valid JSON"
         else
             fail_test "Health endpoint response is not valid JSON"

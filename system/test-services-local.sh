@@ -124,7 +124,8 @@ export VERSION="0.1.0-test"
 echo "Starting API service..."
 python3 "$REPO_ROOT/src/api/main.py" > /tmp/api.log 2>&1 &
 API_PID=$!
-sleep 2
+TIMEOUT=${SERVICE_START_TIMEOUT:-2}
+sleep "$TIMEOUT"
 
 # Check if API is running
 if kill -0 $API_PID 2>/dev/null; then
@@ -140,9 +141,9 @@ if kill -0 $API_PID 2>/dev/null; then
             pass_test "Health endpoint returns valid JSON"
             
             # Check for required fields
-            if echo "$HEALTH_JSON" | grep -q '"status"' && \
-               echo "$HEALTH_JSON" | grep -q '"uptime"' && \
-               echo "$HEALTH_JSON" | grep -q '"version"'; then
+            if echo "$HEALTH_JSON" | grep -q "\"status\"" && \
+               echo "$HEALTH_JSON" | grep -q "\"uptime\"" && \
+               echo "$HEALTH_JSON" | grep -q "\"version\""; then
                 pass_test "Health response has required fields"
             else
                 fail_test "Health response missing required fields"
@@ -154,9 +155,11 @@ if kill -0 $API_PID 2>/dev/null; then
         fail_test "Health endpoint not responding"
     fi
     
-    # Stop API service
-    kill $API_PID 2>/dev/null || true
-    wait $API_PID 2>/dev/null || true
+    # Stop API service (verify PID exists first)
+    if kill -0 $API_PID 2>/dev/null; then
+        kill $API_PID 2>/dev/null || true
+        wait $API_PID 2>/dev/null || true
+    fi
 else
     fail_test "API service failed to start"
 fi
@@ -166,7 +169,7 @@ echo ""
 echo "Starting UI service..."
 python3 "$REPO_ROOT/src/ui/main.py" > /tmp/ui.log 2>&1 &
 UI_PID=$!
-sleep 2
+sleep "$TIMEOUT"
 
 # Check if UI is running
 if kill -0 $UI_PID 2>/dev/null; then
@@ -187,9 +190,11 @@ if kill -0 $UI_PID 2>/dev/null; then
         fail_test "UI endpoint not responding"
     fi
     
-    # Stop UI service
-    kill $UI_PID 2>/dev/null || true
-    wait $UI_PID 2>/dev/null || true
+    # Stop UI service (verify PID exists first)
+    if kill -0 $UI_PID 2>/dev/null; then
+        kill $UI_PID 2>/dev/null || true
+        wait $UI_PID 2>/dev/null || true
+    fi
 else
     fail_test "UI service failed to start"
 fi
@@ -218,9 +223,11 @@ else
     fail_test "Updater service did not produce logs"
 fi
 
-# Stop updater if still running
-kill $UPDATER_PID 2>/dev/null || true
-wait $UPDATER_PID 2>/dev/null || true
+# Stop updater if still running (verify PID exists first)
+if kill -0 $UPDATER_PID 2>/dev/null; then
+    kill $UPDATER_PID 2>/dev/null || true
+    wait $UPDATER_PID 2>/dev/null || true
+fi
 
 # Clean up
 rm -f /tmp/api.log /tmp/ui.log /tmp/updater.log

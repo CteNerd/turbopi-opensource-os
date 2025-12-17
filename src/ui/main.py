@@ -13,27 +13,8 @@ import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 
-class UIHandler(SimpleHTTPRequestHandler):
-    """Minimal HTTP handler for the UI service"""
-
-    def log_message(self, format, *args):
-        """Override to log to stdout instead of stderr"""
-        sys.stdout.write("%s - [%s] %s\n" %
-                        (self.address_string(),
-                         self.log_date_time_string(),
-                         format % args))
-
-    def do_GET(self):
-        """Handle GET requests"""
-        if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html')
-            self.end_headers()
-            
-            robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
-            api_port = os.environ.get('API_PORT', '8080')
-            
-            html = f"""<!DOCTYPE html>
+# HTML template for the UI
+HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
     <title>{robot_name} Control Panel</title>
@@ -84,6 +65,29 @@ class UIHandler(SimpleHTTPRequestHandler):
     </div>
 </body>
 </html>"""
+
+
+class UIHandler(SimpleHTTPRequestHandler):
+    """Minimal HTTP handler for the UI service"""
+
+    def log_message(self, format, *args):
+        """Override to log to stdout instead of stderr"""
+        sys.stdout.write("%s - [%s] %s\n" %
+                        (self.address_string(),
+                         self.log_date_time_string(),
+                         format % args))
+
+    def do_GET(self):
+        """Handle GET requests"""
+        if self.path == '/' or self.path == '/index.html':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            
+            robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
+            api_port = os.environ.get('API_PORT', '8080')
+            
+            html = HTML_TEMPLATE.format(robot_name=robot_name, api_port=api_port)
             self.wfile.write(html.encode())
         else:
             self.send_error(404, "Not Found")
@@ -93,7 +97,16 @@ def main():
     """Main entry point for the UI service"""
     # Load configuration from environment
     host = os.environ.get('UI_HOST', '0.0.0.0')
-    port = int(os.environ.get('UI_PORT', '8081'))
+    
+    # Validate and parse port
+    try:
+        port = int(os.environ.get('UI_PORT', '8081'))
+        if not (1 <= port <= 65535):
+            raise ValueError(f"Port must be between 1 and 65535, got {port}")
+    except ValueError as e:
+        print(f"Error: Invalid UI_PORT configuration: {e}")
+        sys.exit(1)
+    
     robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
 
     print(f"TurboPi Web UI starting...")

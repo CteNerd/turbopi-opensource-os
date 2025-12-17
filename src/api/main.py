@@ -10,10 +10,10 @@ This is a minimal skeleton implementation that provides:
 
 import os
 import sys
-import time
 import json
+import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class APIHandler(BaseHTTPRequestHandler):
@@ -46,6 +46,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
                     cpu_temp = float(f.read().strip()) / 1000.0
             except (FileNotFoundError, ValueError):
+                # CPU temperature not available on this system
                 pass
 
             # Get version from environment or default
@@ -56,7 +57,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 'uptime': uptime,
                 'cpu_temp': cpu_temp,
                 'version': version,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
 
             self.send_response(200)
@@ -64,14 +65,26 @@ class APIHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(health_data).encode())
         except Exception as e:
-            self.send_error(500, f"Internal Server Error: {str(e)}")
+            # Log the detailed error internally
+            logging.error(f"Health endpoint error: {str(e)}")
+            # Return generic error message to client
+            self.send_error(500, "Internal Server Error: Unable to retrieve health status")
 
 
 def main():
     """Main entry point for the API service"""
     # Load configuration from environment
     host = os.environ.get('API_HOST', '0.0.0.0')
-    port = int(os.environ.get('API_PORT', '8080'))
+    
+    # Validate and parse port
+    try:
+        port = int(os.environ.get('API_PORT', '8080'))
+        if not (1 <= port <= 65535):
+            raise ValueError(f"Port must be between 1 and 65535, got {port}")
+    except ValueError as e:
+        print(f"Error: Invalid API_PORT configuration: {e}")
+        sys.exit(1)
+    
     robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
 
     print(f"TurboPi API Backend starting...")
