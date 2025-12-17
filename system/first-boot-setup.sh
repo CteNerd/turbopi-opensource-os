@@ -1,0 +1,128 @@
+#!/bin/bash
+# First-boot setup script for TurboPi OpenSource OS
+# This script runs automatically on first boot via systemd service (turbopi-first-boot.service)
+# to initialize the emergency AP and prepare the system for operation.
+#
+# The systemd service ensures one-time execution using ConditionPathExists.
+# After successful completion, the script creates a flag file to prevent re-execution.
+
+set -e
+
+# Configuration
+TURBOPI_REPO_DIR="/opt/turbopi"
+SETUP_COMPLETE_FLAG="/etc/turbopi/.first-boot-complete"
+LOG_FILE="/var/log/turbopi-first-boot.log"
+# Short timeout for non-interactive first-boot setup (configurable via environment)
+INSTALL_PROMPT_TIMEOUT="${INSTALL_PROMPT_TIMEOUT:-5}"
+
+# Logging function
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+# Error handler
+trap 'log "ERROR: Setup failed at line $LINENO"; exit 1' ERR
+
+# Check if we've already run
+if [ -f "$SETUP_COMPLETE_FLAG" ]; then
+    log "First-boot setup already completed. Exiting."
+    exit 0
+fi
+
+# Start with fresh log on each run to prevent accumulation on retries
+: > "$LOG_FILE"
+
+log "=== TurboPi First-Boot Setup Starting ==="
+
+# Ensure we're running as root
+if [ "$EUID" -ne 0 ]; then 
+    log "ERROR: Must run as root"
+    exit 1
+fi
+
+# Create turbopi directories
+log "Creating TurboPi directories..."
+mkdir -p /etc/turbopi/network
+mkdir -p /var/log/turbopi
+mkdir -p "$TURBOPI_REPO_DIR"
+
+# Check if repository files are already in place
+if [ ! -d "$TURBOPI_REPO_DIR/system" ]; then
+    log "ERROR: TurboPi repository not found at $TURBOPI_REPO_DIR"
+    log "Please ensure the TurboPi repository is cloned to $TURBOPI_REPO_DIR"
+    exit 1
+fi
+
+# Change to repository directory
+cd "$TURBOPI_REPO_DIR"
+
+# Install Emergency AP
+log "Installing Emergency Access Point..."
+if [ -f "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh" ]; then
+    # Run installation in non-interactive mode
+    # Display output on console only (do not capture password to log file for security)
+    if PROMPT_TIMEOUT="$INSTALL_PROMPT_TIMEOUT" "$TURBOPI_REPO_DIR/system/install-emergency-ap.sh"; then
+        log "Emergency AP installation completed successfully"
+    else
+        # Check if it failed due to missing wlan0 (might be on different hardware)
+        if ip link show wlan0 > /dev/null 2>&1; then
+            log "ERROR: Emergency AP installation failed"
+            exit 1
+        else
+            log "WARNING: wlan0 not found. Emergency AP not installed."
+            log "Skipping first-boot setup completion flag - will retry on next boot"
+            exit 1
+        fi
+    fi
+else
+    log "ERROR: install-emergency-ap.sh not found"
+    exit 1
+fi
+
+# Extract actual configured SSID and password from the installed config file
+CONFIGURED_SSID=""
+CONFIGURED_PASSWORD=""
+if [ -f "/etc/turbopi/network/hostapd-emergency.conf" ]; then
+    CONFIGURED_SSID=$(grep '^ssid=' /etc/turbopi/network/hostapd-emergency.conf | sed -n 's/^ssid=//p')
+    CONFIGURED_PASSWORD=$(grep '^wpa_passphrase=' /etc/turbopi/network/hostapd-emergency.conf | sed -n 's/^wpa_passphrase=//p')
+fi
+
+# Validate extracted SSID and password, and log appropriate messages
+log "Emergency Access Point Details:"
+if [ -n "$CONFIGURED_SSID" ] && [ "$CONFIGURED_SSID" != "TurboPi-Emergency-<MAC>" ]; then
+    log "  SSID: $CONFIGURED_SSID"
+else
+    log "  SSID: Could not determine. Check /etc/turbopi/network/hostapd-emergency.conf for a valid 'ssid=TurboPi-Emergency-XXXX' entry."
+    log "       Expected format: ssid=TurboPi-Emergency-XXXX, where XXXX are the last 4 hex digits of the wlan0 MAC address (e.g., TurboPi-Emergency-EEFF for MAC aa:bb:cc:dd:ee:ff)"
+fi
+
+if [ -n "$CONFIGURED_PASSWORD" ] && [ "$CONFIGURED_PASSWORD" != "PLACEHOLDER_WILL_BE_REPLACED_BY_INSTALL_SCRIPT" ]; then
+    # SECURITY: Use echo directly (not log function) to avoid writing password to persistent log files.
+    # Password is displayed on console only and is NOT captured in /var/log or systemd journal.
+    echo "  Password: $CONFIGURED_PASSWORD"
+    echo "           WARNING: IMPORTANT: Record this password securely!"
+else
+    log "  Password: Could not determine (check /etc/turbopi/network/hostapd-emergency.conf)"
+    log "ERROR: Failed to extract valid password from config file"
+    exit 1
+fi
+
+log "  IP: 192.168.50.1"
+log "  Web UI: http://192.168.50.1:8080"
+log ""
+log "To configure home Wi-Fi, run:"
+log "  sudo /opt/turbopi/system/install-home-wifi.sh"
+log ""
+
+# Mark setup as complete only after all critical operations (including password display) succeed
+log "Creating completion flag..."
+mkdir -p "$(dirname "$SETUP_COMPLETE_FLAG")"
+date > "$SETUP_COMPLETE_FLAG"
+
+log "=== TurboPi First-Boot Setup Completed Successfully ==="
+
+# Remove log file after successful completion to avoid persisting any sensitive context
+# The systemd service outputs to console, so logs are available during execution
+rm -f "$LOG_FILE"
+
+exit 0

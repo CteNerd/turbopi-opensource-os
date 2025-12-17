@@ -1,0 +1,19 @@
+[Unit]
+Description=TurboPi First-Boot Setup
+After=network-pre.target
+Before=network.target
+DefaultDependencies=no
+# Only run on first boot. The ConditionPathExists directive prevents execution after the completion flag is created.
+ConditionPathExists=!/etc/turbopi/.first-boot-complete
+
+[Service]
+Type=oneshot
+ExecStart=/opt/turbopi/system/first-boot-setup.sh
+RemainAfterExit=yes
+# Output to console only to prevent password from being captured in systemd journal
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+
+[Install]
+WantedBy=multi-user.target

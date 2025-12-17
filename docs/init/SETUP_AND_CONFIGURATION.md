@@ -11,6 +11,8 @@
 4. Config written to `/etc/turbopi/config.env`
 5. Services restarted automatically
 
+For information on creating a base OS image with the emergency AP pre-configured, see [BASE_OS_IMAGE.md](BASE_OS_IMAGE.md).
+
 ## Emergency Access Point
 
 The TurboPi system includes an always-on emergency access point for setup and recovery.

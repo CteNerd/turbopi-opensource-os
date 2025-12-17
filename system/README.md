@@ -2,10 +2,18 @@
 
 This directory contains system-level configuration files for TurboPi OpenSource OS.
 
+## Quick Start
+
+**Creating a Base OS Image**: See [docs/init/BASE_OS_IMAGE.md](../docs/init/BASE_OS_IMAGE.md) for complete instructions on creating a base OS image that boots with the emergency AP pre-configured.
+
+**Testing**: Run `./test-dual-networking.sh` to verify dual networking setup and acceptance criteria.
+
 ## Directory Structure
 
 - `network/` - Network configuration files
 - `systemd/` - Systemd service unit files
+- `first-boot-setup.sh` - First-boot initialization script (automatically installs emergency AP)
+- `test-dual-networking.sh` - Integration test suite for dual networking
 
 ## Emergency Access Point
 
@@ -13,11 +21,18 @@ The emergency access point provides always-on network access for setup and recov
 
 ### Network Details
 
-- **SSID**: `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits of the wlan0 MAC address, after removing colons)
-- **Password**: `TurboPi-7f9d2b1c4e5a` (default - must be changed for production)
+- **SSID**: `TurboPi-Emergency-<MAC>` (where `<MAC>` is the last 4 hex digits of the wlan0 MAC address, after removing colons and using uppercase; e.g., if MAC ends in ee:ff, use EEFF)
+- **Password**: Unique per-device password (automatically generated during installation)
 - **Robot IP**: `192.168.50.1`
 - **DHCP Range**: `192.168.50.10` - `192.168.50.50`
 - **Subnet**: `192.168.50.0/24`
+
+### Security
+
+The installation script automatically generates a **unique, device-specific password** for each robot's emergency AP based on the device's machine-id and MAC address. This ensures:
+- No two devices share the same password
+- No publicly-known default credentials
+- Strong, cryptographically-derived passwords (20 characters from SHA256 hash)
 
 ### Features
 
@@ -178,18 +193,24 @@ sudo systemctl start turbopi-emergency-ap.service
 
 ### Security Considerations
 
-- **IMPORTANT**: The default password (`TurboPi-7f9d2b1c4e5a`) **MUST** be changed for production use
+- **Automatic Password Generation**: The installation script generates a unique, device-specific password
+  - Password is derived from machine-id, MAC address, and a fixed salt string ("turbopi-emergency-ap") using SHA256
+  - Each device receives a strong, unique 20-character password
+  - Password is displayed during installation and should be securely recorded
+- **SSID Customization**: Automatically configured during installation
+  - The SSID includes the last 4 hex digits of wlan0 MAC address
+  - Helps distinguish multiple robots in the same environment
+  - Example: `TurboPi-Emergency-EEFF`
+- **Password Retrieval**: If you need to retrieve the current password
+  - Check `/etc/turbopi/network/hostapd-emergency.conf`
+  - Look for the `wpa_passphrase` line
+- **Changing Password**: To manually change the emergency AP password
   - Edit `/etc/turbopi/network/hostapd-emergency.conf` and change the `wpa_passphrase` value
   - Use a strong password of 8-63 characters
-  - Restart the service after changing: `sudo systemctl restart turbopi-emergency-ap.service`
-- **SSID Customization**: The SSID includes a `<MAC>` placeholder for device identification
-  - Replace `<MAC>` in `/etc/turbopi/network/hostapd-emergency.conf` with the last 4 hex digits of the wlan0 MAC address, after removing colons (e.g., `EEFF` from `aa:bb:cc:dd:ee:ff`)
-  - This helps distinguish multiple robots in the same environment
-  - Example: `TurboPi-Emergency-EEFF`
+  - Restart the service: `sudo systemctl restart turbopi-emergency-ap.service`
 - The emergency AP is intended for local setup and recovery only
 - SSH access should be restricted to development environments
 - Consider implementing additional authentication for the web UI
-- For production deployments, generate unique passwords per device
 
 ### Troubleshooting
 
