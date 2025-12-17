@@ -56,10 +56,27 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
 - PR title format: "(#ISSUE) <short description>"
 - PR description must include: "Closes #ISSUE" (or Fixes/Resolves) and a checklist of acceptance criteria.
 - If behavior changes, update the relevant docs.
+- Pre-submission consistency checks (think like a senior engineer):
+  - If you implement a feature in one service, check if similar services need the same implementation
+  - If you add logging to one Python service, ensure all Python services use consistent logging
+  - If you set file permissions in a script, verify documentation reflects those actual permissions
+  - If you import a module, ensure it's used; if docstring claims functionality, ensure it's implemented
+  - Scan for similar patterns across the codebase and ensure consistency
+  - Review all documentation that might reference your changes (READMEs, docs/*, config examples)
+  - Check for copy-paste errors where values/comments weren't updated for the new context
 
 ## 9) Logging and diagnostics
 - Prefer structured logs; avoid logging secrets.
 - Add useful diagnostics to help operate without SSH (where applicable).
+- Python services logging requirements:
+  - ALL services must use Python's `logging` module, not `print()` statements
+  - Configure logging with `logging.basicConfig()` in `main()` function before any logging calls
+  - Use consistent format: `'%(asctime)s - %(name)s - %(levelname)s - %(message)s'`
+  - Support `LOG_LEVEL` environment variable (default: INFO)
+  - Output to stdout via `stream=sys.stdout` for systemd journal integration
+  - Use appropriate log levels: `logging.info()` for normal operations, `logging.error()` for errors, `logging.warning()` for warnings
+  - If docstring claims "Basic logging", the implementation must use the `logging` module
+  - Consistency across services is critical for troubleshooting and maintenance
 
 ## 10) Shell scripting best practices
 - Always quote variables to prevent word splitting: use `"$VAR"` not `$VAR`

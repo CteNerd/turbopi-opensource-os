@@ -35,8 +35,16 @@ This directory contains the runtime service implementations for TurboPi OpenSour
 These are minimal implementations that:
 - ✅ Start correctly via systemd
 - ✅ Load configuration from `/etc/turbopi/config.env`
-- ✅ Provide basic logging
+- ✅ Provide structured logging with Python's `logging` module
 - ✅ Support graceful shutdown
+
+**Logging Standards**:
+All services implement consistent logging with:
+- Python's `logging` module with `basicConfig()` configuration
+- Format: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+- LOG_LEVEL environment variable support (default: INFO)
+- Output to stdout for systemd journal integration
+- Appropriate log levels (info, error, warning) for different operations
 
 **Future Enhancements** (subsequent EPICs):
 - Full API implementation per OpenAPI spec
