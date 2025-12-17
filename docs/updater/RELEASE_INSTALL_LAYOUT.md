@@ -95,14 +95,14 @@ Version switching is atomic and follows this sequence:
    ```bash
    ln -sfn /opt/turbopi/releases/<version> /opt/turbopi/current
    ```
-6. **Restart Services** - Reload services using new code
+6. **Restart Services** - Reload services using new code (in dependency order)
    ```bash
    systemctl restart turbopi-api.service
    systemctl restart turbopi-ui.service
-   systemctl restart turbopi-updater.service
+   systemctl restart turbopi-updater.service  # Last, as it performs the update
    ```
 7. **Health Check** - Verify services are healthy
-8. **Cleanup** - Remove download staging directory
+8. **Cleanup** - Remove download staging directory (only if health check passed; preserve failed releases for debugging)
 
 ### Rollback Sequence
 
@@ -153,10 +153,10 @@ Each release directory contains a `metadata.json` file with release information:
 ```json
 {
   "version": "0.1.0",
-  "release_date": "YYYY-MM-DDTHH:MM:SSZ",
+  "release_date": "2024-01-15T14:30:00Z",
   "checksum": "sha256:abc123...",
   "signature": "-----BEGIN PGP SIGNATURE-----...",
-  "install_date": "YYYY-MM-DDTHH:MM:SSZ",
+  "install_date": "2024-01-20T09:15:00Z",
   "source_url": "https://github.com/CteNerd/turbopi-opensource-os/releases/download/v0.1.0/turbopi-0.1.0.tar.gz",
   "requires_reboot": false,
   "health_check_passed": true
@@ -166,10 +166,10 @@ Each release directory contains a `metadata.json` file with release information:
 ### Metadata Fields
 
 - `version` - Semantic version string (e.g., "0.1.0")
-- `release_date` - When the release was published
+- `release_date` - When the release was published (ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`)
 - `checksum` - SHA256 checksum for verification
 - `signature` - PGP signature for authenticity (future)
-- `install_date` - When this release was installed on this robot
+- `install_date` - When this release was installed on this robot (ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`)
 - `source_url` - Download URL for this release
 - `requires_reboot` - Whether this release requires a system reboot
 - `health_check_passed` - Result of post-install health check
@@ -240,14 +240,16 @@ This ensures services automatically use the new version after symlink swap.
 /opt/turbopi/                     # root:root 755
 /opt/turbopi/releases/            # root:root 755
 /opt/turbopi/releases/<version>/  # turbopi:turbopi 755
-/opt/turbopi/current              # root:root 777 (symlink)
-/opt/turbopi/previous             # root:root 777 (symlink)
+/opt/turbopi/current              # root:root (symlink - permissions from target)
+/opt/turbopi/previous             # root:root (symlink - permissions from target)
 /opt/turbopi/downloads/           # root:root 700
 ```
 
 ### Initial Installation
 
 On first boot, the install script creates the initial release:
+
+**Note**: Development installations use the `-dev` suffix (e.g., `0.1.0-dev`) to distinguish them from official tagged releases.
 
 ```bash
 # Create directory structure
@@ -355,11 +357,24 @@ This migration is non-breaking - services continue to work via the `current` sym
 ```bash
 /opt/turbopi/
 ├── releases/
-│   ├── 0.1.0/           # Will be cleaned up (older than retention)
+│   ├── 0.1.0/           # First additional older release (kept per retention policy)
 │   ├── 0.1.1/           # Previous release
 │   └── 0.1.2/           # Current release
 ├── current -> releases/0.1.2
 └── previous -> releases/0.1.1
+```
+
+### Example: After Third Update (0.1.3) with Cleanup
+
+```bash
+/opt/turbopi/
+├── releases/
+│   ├── 0.1.0/           # Will be cleaned up (exceeds retention: current + previous + 2 older)
+│   ├── 0.1.1/           # Second additional older release
+│   ├── 0.1.2/           # Previous release
+│   └── 0.1.3/           # Current release
+├── current -> releases/0.1.3
+└── previous -> releases/0.1.2
 ```
 
 ### Example: After Failed Update (Rollback)
@@ -375,7 +390,10 @@ previous -> releases/0.1.1  # Previous working version
 
 # Health check fails - rollback
 current -> releases/0.1.1   # Rolled back
-previous -> releases/0.1.1  # Same (previous remains)
+previous -> releases/0.1.0  # Restored to enable further rollback if needed
+
+# Note: If rollback also fails, both symlinks would point to the same version,
+# losing the ability to rollback further. The system should enter safe mode.
 ```
 
 ## References
