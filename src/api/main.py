@@ -73,6 +73,14 @@ class APIHandler(BaseHTTPRequestHandler):
 
 def main():
     """Main entry point for the API service"""
+    # Configure logging
+    log_level = os.environ.get('LOG_LEVEL', 'INFO')
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper(), logging.INFO),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout
+    )
+    
     # Load configuration from environment
     host = os.environ.get('API_HOST', '0.0.0.0')
     
