@@ -108,10 +108,10 @@ Version switching is atomic and follows this sequence:
 
 If health checks fail after update:
 
-1. **Save Old Previous** - Store the target of `previous` before update (implementation should save this during Update Sequence below)
+1. **Save Old Previous** - Store the target of `previous` before update (implementation should save this during Update Sequence above)
    ```bash
    OLD_PREVIOUS=$(readlink /opt/turbopi/previous)
-   # Store in variable or temp file before "Update Previous" step in Update Sequence (step 4)
+   # Store in variable or temp file before "Update Previous" step in Update Sequence (step 4 above)
    ```
 2. **Switch Current** - Point `current` back to `previous` target
    ```bash
