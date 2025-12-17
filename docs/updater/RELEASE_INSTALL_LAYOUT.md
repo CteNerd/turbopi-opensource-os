@@ -338,15 +338,17 @@ if [ -L /opt/turbopi/current ]; then
 fi
 
 # Backup current installation
-CURRENT_VERSION=$(grep '^VERSION=' /etc/turbopi/config.env | cut -d= -f2 | tr -d '"' | xargs)
+# Use printf %q to safely read the version value without shell evaluation
+CURRENT_VERSION=$(grep '^VERSION=' /etc/turbopi/config.env | head -1 | cut -d= -f2- | sed 's/^["'"'"']\(.*\)["'"'"']$/\1/' | head -c 100)
 
 if [ -z "$CURRENT_VERSION" ]; then
     echo "Error: VERSION not found in config.env"
     exit 1
 fi
 
-# Validate version format (alphanumeric, dots, hyphens only)
-if ! echo "$CURRENT_VERSION" | grep -qE '^[a-zA-Z0-9.-]+$'; then
+# Validate version format: alphanumeric segments separated by dots or hyphens
+# No leading/trailing/consecutive separators allowed
+if ! echo "$CURRENT_VERSION" | grep -qE '^[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*$'; then
     echo "Error: Invalid version format: $CURRENT_VERSION"
     exit 1
 fi
