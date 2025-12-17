@@ -90,15 +90,15 @@ def main():
         if not (1 <= port <= 65535):
             raise ValueError(f"Port must be between 1 and 65535, got {port}")
     except ValueError as e:
-        print(f"Error: Invalid API_PORT configuration: {e}")
+        logging.error(f"Invalid API_PORT configuration: {e}")
         sys.exit(1)
     
     robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
 
-    print(f"TurboPi API Backend starting...")
-    print(f"Robot Name: {robot_name}")
-    print(f"Listening on {host}:{port}")
-    print(f"Health endpoint: http://{host}:{port}/health")
+    logging.info(f"TurboPi API Backend starting...")
+    logging.info(f"Robot Name: {robot_name}")
+    logging.info(f"Listening on {host}:{port}")
+    logging.info(f"Health endpoint: http://{host}:{port}/health")
 
     # Create and start HTTP server
     server = HTTPServer((host, port), APIHandler)
@@ -106,7 +106,7 @@ def main():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down API service...")
+        logging.info("\nShutting down API service...")
         server.shutdown()
         sys.exit(0)
 

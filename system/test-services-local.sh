@@ -107,8 +107,8 @@ else
     fail_test "test-services.sh has syntax errors"
 fi
 
-# Test 5: Start services and test functionality (optional - commented out by default)
-# Uncomment to run live tests, but note: requires manual cleanup of processes
+# Test 5: Start services and test functionality (controlled by RUN_LIVE_TESTS environment variable)
+# Set RUN_LIVE_TESTS=1 to run live tests, but note: requires manual cleanup of processes
 echo ""
 echo "Test 5: Service functionality (live test - skipped in automated mode)"
 if [ "${RUN_LIVE_TESTS:-}" = "1" ]; then
