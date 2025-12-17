@@ -108,13 +108,18 @@ Version switching is atomic and follows this sequence:
 
 If health checks fail after update:
 
-1. **Switch Current** - Point `current` back to `previous` target
+1. **Save Old Previous** - Store the target of `previous` before update (e.g., 0.1.0)
+2. **Switch Current** - Point `current` back to `previous` target
    ```bash
    ln -sfn "$(readlink /opt/turbopi/previous)" /opt/turbopi/current
    ```
-2. **Restart Services** - Reload services with previous version
-3. **Health Check** - Verify rollback succeeded
-4. **Log Failure** - Record rollback reason for user visibility
+3. **Restore Previous** - Restore `previous` to the version before the failed update (to enable further rollback if needed)
+   ```bash
+   ln -sfn /opt/turbopi/releases/<old-previous-version> /opt/turbopi/previous
+   ```
+4. **Restart Services** - Reload services with previous version
+5. **Health Check** - Verify rollback succeeded
+6. **Log Failure** - Record rollback reason for user visibility
 
 ### Atomicity Guarantees
 
@@ -239,11 +244,13 @@ This ensures services automatically use the new version after symlink swap.
 ```bash
 /opt/turbopi/                     # root:root 755
 /opt/turbopi/releases/            # root:root 755
-/opt/turbopi/releases/<version>/  # turbopi:turbopi 755
+/opt/turbopi/releases/<version>/  # root:root 755 (read-only to prevent privilege escalation)
 /opt/turbopi/current              # root:root (symlink - permissions from target)
 /opt/turbopi/previous             # root:root (symlink - permissions from target)
 /opt/turbopi/downloads/           # root:root 700
 ```
+
+**Security Note**: Release directories must be owned by `root:root` and not writable by unprivileged users. Since the updater service runs as root and executes code from these directories, making them writable by the `turbopi` user would allow privilege escalation if that account were compromised. The API and UI services run as the unprivileged `turbopi` user and only need read access to the release directories.
 
 ### Initial Installation
 
@@ -263,8 +270,9 @@ cp -r /path/to/repo/src/* /opt/turbopi/releases/0.1.0-dev/
 ln -sfn /opt/turbopi/releases/0.1.0-dev /opt/turbopi/current
 ln -sfn /opt/turbopi/releases/0.1.0-dev /opt/turbopi/previous
 
-# Set permissions
-chown -R turbopi:turbopi /opt/turbopi/releases/0.1.0-dev
+# Set permissions (root-owned for security)
+chown -R root:root /opt/turbopi/releases/0.1.0-dev
+chmod -R 755 /opt/turbopi/releases/0.1.0-dev
 ```
 
 ## Update Protocol Integration
@@ -364,17 +372,32 @@ This migration is non-breaking - services continue to work via the `current` sym
 └── previous -> releases/0.1.1
 ```
 
-### Example: After Third Update (0.1.3) with Cleanup
+### Example: After Third Update (0.1.3)
 
 ```bash
 /opt/turbopi/
 ├── releases/
-│   ├── 0.1.0/           # Will be cleaned up (exceeds retention: current + previous + 2 older)
+│   ├── 0.1.0/           # First additional older release (kept - at retention limit of 4)
 │   ├── 0.1.1/           # Second additional older release
 │   ├── 0.1.2/           # Previous release
 │   └── 0.1.3/           # Current release
 ├── current -> releases/0.1.3
 └── previous -> releases/0.1.2
+```
+
+### Example: After Fourth Update (0.1.4) with Cleanup
+
+```bash
+/opt/turbopi/
+├── releases/
+│   ├── 0.1.1/           # First additional older release (kept)
+│   ├── 0.1.2/           # Second additional older release (kept)
+│   ├── 0.1.3/           # Previous release
+│   └── 0.1.4/           # Current release
+├── current -> releases/0.1.4
+└── previous -> releases/0.1.3
+
+# Note: 0.1.0 was removed during cleanup (exceeded retention: current + previous + 2 = 4 max)
 ```
 
 ### Example: After Failed Update (Rollback)
