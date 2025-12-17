@@ -113,9 +113,10 @@ If health checks fail after update:
    ```bash
    ln -sfn "$(readlink /opt/turbopi/previous)" /opt/turbopi/current
    ```
-3. **Restore Previous** - Restore `previous` to the version before the failed update (to enable further rollback if needed)
+3. **Restore Previous** - Restore `previous` to the saved version from step 1 (to enable further rollback if needed)
    ```bash
-   ln -sfn /opt/turbopi/releases/<old-previous-version> /opt/turbopi/previous
+   # Example: if old previous was 0.1.0
+   ln -sfn /opt/turbopi/releases/0.1.0 /opt/turbopi/previous
    ```
 4. **Restart Services** - Reload services with previous version
 5. **Health Check** - Verify rollback succeeded
@@ -377,8 +378,8 @@ This migration is non-breaking - services continue to work via the `current` sym
 ```bash
 /opt/turbopi/
 ├── releases/
-│   ├── 0.1.0/           # First additional older release (kept - at retention limit of 4)
-│   ├── 0.1.1/           # Second additional older release
+│   ├── 0.1.0/           # Second additional older release (kept - at retention limit of 4)
+│   ├── 0.1.1/           # First additional older release (kept)
 │   ├── 0.1.2/           # Previous release
 │   └── 0.1.3/           # Current release
 ├── current -> releases/0.1.3
