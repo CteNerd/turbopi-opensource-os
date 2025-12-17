@@ -6,14 +6,66 @@ This directory contains system-level configuration files for TurboPi OpenSource 
 
 **Creating a Base OS Image**: See [docs/init/BASE_OS_IMAGE.md](../docs/init/BASE_OS_IMAGE.md) for complete instructions on creating a base OS image that boots with the emergency AP pre-configured.
 
-**Testing**: Run `./test-dual-networking.sh` to verify dual networking setup and acceptance criteria.
+**Installing Runtime Services**: Run `sudo ./install-services.sh` to install API, UI, and Updater services.
+
+**Testing**: 
+- Networking: Run `./test-dual-networking.sh` to verify dual networking setup
+- Services: Run `sudo ./test-services.sh` to verify runtime services
 
 ## Directory Structure
 
 - `network/` - Network configuration files
 - `systemd/` - Systemd service unit files
+- `config.env.example` - Configuration template for runtime services
 - `first-boot-setup.sh` - First-boot initialization script (automatically installs emergency AP)
+- `install-services.sh` - Runtime service installation script
 - `test-dual-networking.sh` - Integration test suite for dual networking
+- `test-services.sh` - Runtime service test suite
+
+## Runtime Services
+
+TurboPi uses systemd to manage three core services:
+
+### Installation
+
+```bash
+cd system
+sudo ./install-services.sh
+```
+
+This installs and enables:
+- **turbopi-api.service** - REST API backend (port 8080)
+- **turbopi-ui.service** - Web control interface (port 8081)
+- **turbopi-updater.service** - Update management daemon
+
+See [docs/init/RUNTIME_SERVICE_SKELETON.md](../docs/init/RUNTIME_SERVICE_SKELETON.md) for complete documentation.
+
+### Configuration
+
+All services load configuration from `/etc/turbopi/config.env`:
+
+```bash
+# Edit configuration
+sudo nano /etc/turbopi/config.env
+
+# Restart services to apply changes
+sudo systemctl restart turbopi-api.service
+sudo systemctl restart turbopi-ui.service
+sudo systemctl restart turbopi-updater.service
+```
+
+### Testing
+
+```bash
+cd system
+sudo ./test-services.sh
+```
+
+Verifies:
+- Services installed and enabled
+- Configuration loaded correctly
+- Health endpoint responds
+- Services can start successfully
 
 ## Emergency Access Point
 
