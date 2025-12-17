@@ -108,15 +108,18 @@ Version switching is atomic and follows this sequence:
 
 If health checks fail after update:
 
-1. **Save Old Previous** - Store the target of `previous` before update (e.g., 0.1.0)
+1. **Save Old Previous** - Store the target of `previous` before update (implementation should save this during the update sequence)
+   ```bash
+   OLD_PREVIOUS=$(readlink /opt/turbopi/previous)
+   # Store in variable or temp file before updating previous in step 4 of Update Sequence
+   ```
 2. **Switch Current** - Point `current` back to `previous` target
    ```bash
    ln -sfn "$(readlink /opt/turbopi/previous)" /opt/turbopi/current
    ```
 3. **Restore Previous** - Restore `previous` to the saved version from step 1 (to enable further rollback if needed)
    ```bash
-   # Example: if old previous was 0.1.0
-   ln -sfn /opt/turbopi/releases/0.1.0 /opt/turbopi/previous
+   ln -sfn "$OLD_PREVIOUS" /opt/turbopi/previous
    ```
 4. **Restart Services** - Reload services with previous version
 5. **Health Check** - Verify rollback succeeded
