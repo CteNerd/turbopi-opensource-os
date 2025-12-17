@@ -248,7 +248,7 @@ This ensures services automatically use the new version after symlink swap.
 ```bash
 /opt/turbopi/                     # root:root 755
 /opt/turbopi/releases/            # root:root 755
-/opt/turbopi/releases/<version>/  # root:root 755 (read-only for unprivileged users to prevent privilege escalation)
+/opt/turbopi/releases/<version>/  # root:root 755 (root-owned; unprivileged users have read-only access)
 /opt/turbopi/current              # root:root (symlink - permissions from target)
 /opt/turbopi/previous             # root:root (symlink - permissions from target)
 /opt/turbopi/downloads/           # root:root 700
@@ -326,13 +326,13 @@ if [ ! -f /etc/turbopi/config.env ]; then
     exit 1
 fi
 
-if [ ! -d /opt/turbopi/current ]; then
-    echo "Error: /opt/turbopi/current directory not found"
+if [ ! -e /opt/turbopi/current ]; then
+    echo "Error: /opt/turbopi/current not found (should be symlink or directory)"
     exit 1
 fi
 
 # Backup current installation
-CURRENT_VERSION=$(grep VERSION /etc/turbopi/config.env | cut -d= -f2)
+CURRENT_VERSION=$(grep '^VERSION=' /etc/turbopi/config.env | cut -d= -f2 | tr -d '"' | xargs)
 
 if [ -z "$CURRENT_VERSION" ]; then
     echo "Error: VERSION not found in config.env"
