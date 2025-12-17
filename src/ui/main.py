@@ -10,6 +10,7 @@ This is a minimal skeleton implementation that provides:
 
 import os
 import sys
+import logging
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 
@@ -95,6 +96,14 @@ class UIHandler(SimpleHTTPRequestHandler):
 
 def main():
     """Main entry point for the UI service"""
+    # Configure logging
+    log_level = os.environ.get('LOG_LEVEL', 'INFO')
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper(), logging.INFO),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout
+    )
+    
     # Load configuration from environment
     host = os.environ.get('UI_HOST', '0.0.0.0')
     
@@ -104,15 +113,15 @@ def main():
         if not (1 <= port <= 65535):
             raise ValueError(f"Port must be between 1 and 65535, got {port}")
     except ValueError as e:
-        print(f"Error: Invalid UI_PORT configuration: {e}")
+        logging.error(f"Invalid UI_PORT configuration: {e}")
         sys.exit(1)
     
     robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
 
-    print(f"TurboPi Web UI starting...")
-    print(f"Robot Name: {robot_name}")
-    print(f"Listening on {host}:{port}")
-    print(f"Access UI at: http://{host}:{port}/")
+    logging.info(f"TurboPi Web UI starting...")
+    logging.info(f"Robot Name: {robot_name}")
+    logging.info(f"Listening on {host}:{port}")
+    logging.info(f"Access UI at: http://{host}:{port}/")
 
     # Create and start HTTP server
     server = HTTPServer((host, port), UIHandler)
@@ -120,7 +129,7 @@ def main():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down UI service...")
+        logging.info("\nShutting down UI service...")
         server.shutdown()
         sys.exit(0)
 

@@ -9,8 +9,10 @@ This is a minimal skeleton implementation that provides:
 """
 
 import os
+import sys
 import time
 import signal
+import logging
 
 
 class UpdaterService:
@@ -27,16 +29,16 @@ class UpdaterService:
 
     def handle_shutdown(self, signum, frame):
         """Handle shutdown signals gracefully"""
-        print(f"\nReceived signal {signum}, shutting down updater service...")
+        logging.info(f"Received signal {signum}, shutting down updater service...")
         self.running = False
 
     def run(self):
         """Main service loop"""
-        print(f"TurboPi Updater Service starting...")
-        print(f"Robot Name: {self.robot_name}")
-        print(f"Auto Update: {self.auto_update}")
-        print(f"Service running in background mode...")
-        print(f"Updater service: READY - waiting for update requests")
+        logging.info(f"TurboPi Updater Service starting...")
+        logging.info(f"Robot Name: {self.robot_name}")
+        logging.info(f"Auto Update: {self.auto_update}")
+        logging.info(f"Service running in background mode...")
+        logging.info(f"Updater service: READY - waiting for update requests")
 
         # Main service loop - runs indefinitely until shutdown
         check_count = 0
@@ -46,13 +48,21 @@ class UpdaterService:
             time.sleep(60)  # Check every minute
             check_count += 1
             if check_count % 10 == 0:  # Log every 10 minutes
-                print(f"Updater service: RUNNING - check #{check_count} completed")
+                logging.info(f"Updater service: RUNNING - check #{check_count} completed")
 
-        print("Updater service: STOPPED")
+        logging.info("Updater service: STOPPED")
 
 
 def main():
     """Main entry point for the updater service"""
+    # Configure logging
+    log_level = os.environ.get('LOG_LEVEL', 'INFO')
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper(), logging.INFO),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout
+    )
+    
     service = UpdaterService()
     service.run()
 
