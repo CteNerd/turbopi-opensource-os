@@ -6,6 +6,11 @@ This module handles:
 - Artifact download from release URLs
 - SHA256 checksum verification
 - Safe failure handling
+- URL redaction for secure logging (removes credentials and query parameters)
+
+Security Notes:
+- All URLs are redacted before logging to prevent credential leakage
+- Only public URLs without authentication should be used for downloads
 """
 
 import os
@@ -13,6 +18,7 @@ import hashlib
 import logging
 import urllib.request
 import urllib.error
+from urllib.parse import urlparse, urlunparse
 
 
 logger = logging.getLogger(__name__)
@@ -28,19 +34,61 @@ class ChecksumError(Exception):
     pass
 
 
+def _redact_url(url: str) -> str:
+    """
+    Redact sensitive information from URLs for safe logging.
+    
+    Removes query parameters and authentication credentials to prevent
+    leaking secrets in logs.
+    
+    Args:
+        url: Original URL that may contain sensitive information
+        
+    Returns:
+        Redacted URL safe for logging (without query params and credentials)
+    """
+    try:
+        parsed = urlparse(url)
+        # Build netloc without credentials, preserving hostname and port
+        if parsed.hostname:
+            netloc = parsed.hostname
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+        else:
+            # Fallback: strip credentials from netloc if hostname not available
+            netloc = parsed.netloc.split('@')[-1] if '@' in parsed.netloc else parsed.netloc
+        
+        # Remove username, password, and query parameters
+        redacted = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            '',  # Remove params
+            '',  # Remove query
+            ''   # Remove fragment
+        ))
+        return redacted
+    except Exception:
+        # If URL parsing fails, return a safe placeholder
+        return "<url-redacted>"
+
+
 def download_file(url: str, destination: str, timeout: int = 300) -> None:
     """
     Download a file from URL to destination path.
     
+    URLs are automatically redacted in logs to prevent credential leakage.
+    Use only public URLs without authentication for downloads.
+    
     Args:
-        url: URL to download from
+        url: URL to download from (credentials/query params redacted in logs)
         destination: Local file path to save to
         timeout: Download timeout in seconds (default: 300)
         
     Raises:
         DownloadError: If download fails
     """
-    logger.info(f"Downloading from {url}")
+    logger.info(f"Downloading from {_redact_url(url)}")
     logger.info(f"Saving to {destination}")
     
     # Create destination directory if it doesn't exist
@@ -75,12 +123,12 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
             logger.info(f"Download complete: {downloaded} bytes")
             
     except urllib.error.HTTPError as e:
-        error_msg = f"HTTP error downloading {url}: {e.code} {e.reason}"
+        error_msg = f"HTTP error downloading {_redact_url(url)}: {e.code} {e.reason}"
         logger.error(error_msg)
         raise DownloadError(error_msg) from e
         
     except urllib.error.URLError as e:
-        error_msg = f"Network error downloading {url}: {e.reason}"
+        error_msg = f"Network error downloading {_redact_url(url)}: {e.reason}"
         logger.error(error_msg)
         raise DownloadError(error_msg) from e
         
@@ -90,7 +138,7 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
         raise DownloadError(error_msg) from e
         
     except Exception as e:
-        error_msg = f"Unexpected error downloading {url}: {e}"
+        error_msg = f"Unexpected error downloading {_redact_url(url)}: {e}"
         logger.error(error_msg)
         raise DownloadError(error_msg) from e
 
@@ -177,7 +225,7 @@ def download_and_verify(url: str, destination: str, expected_checksum: str,
         DownloadError: If download fails
         ChecksumError: If checksum verification fails
     """
-    logger.info(f"Starting download and verification from {url}")
+    logger.info(f"Starting download and verification from {_redact_url(url)}")
     
     try:
         # Download the file

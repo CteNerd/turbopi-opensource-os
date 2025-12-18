@@ -4,6 +4,7 @@ Integration tests for updater service with download functionality.
 """
 
 import os
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -35,7 +36,6 @@ class TestUpdaterServiceDownload(unittest.TestCase):
     
     def tearDown(self):
         """Clean up test environment"""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         
         # Restore original environment variables
@@ -112,6 +112,24 @@ class TestUpdaterServiceDownload(unittest.TestCase):
 
 class TestUpdaterServiceInitialization(unittest.TestCase):
     """Tests for updater service initialization"""
+    
+    def setUp(self):
+        """Set up test environment"""
+        # Save original environment variables
+        self.original_env = {
+            'ROBOT_NAME': os.environ.get('ROBOT_NAME'),
+            'AUTO_UPDATE': os.environ.get('AUTO_UPDATE'),
+            'DOWNLOAD_DIR': os.environ.get('DOWNLOAD_DIR')
+        }
+    
+    def tearDown(self):
+        """Clean up test environment"""
+        # Restore original environment variables
+        for key, value in self.original_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
     
     def test_service_initialization(self):
         """Test that service initializes with correct configuration"""
