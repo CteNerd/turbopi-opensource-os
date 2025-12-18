@@ -9,6 +9,8 @@
   current -> releases/0.1.0
   previous -> releases/0.0.9
 
+See [RELEASE_INSTALL_LAYOUT.md](./RELEASE_INSTALL_LAYOUT.md) for complete directory structure and symlink strategy.
+
 ## Update Steps
 
 1. Fetch latest stable release metadata

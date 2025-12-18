@@ -52,6 +52,8 @@ The goals of this model are:
 8. Health check validates success
 9. Rollback executed automatically on failure
 
+See [docs/updater/RELEASE_INSTALL_LAYOUT.md](../updater/RELEASE_INSTALL_LAYOUT.md) for detailed directory structure and atomic switching mechanism.
+
 ---
 
 ## UI Controls
