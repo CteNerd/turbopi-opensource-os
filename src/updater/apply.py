@@ -19,8 +19,8 @@ import subprocess
 import logging
 from typing import Optional, Tuple
 from download import download_and_verify, DownloadError, ChecksumError
-from install import install_release, update_metadata_health_status, InstallError, get_release_metadata
-from health import verify_release_health, log_failed_service_details
+from install import install_release, update_metadata_health_status, InstallError
+from health import verify_release_health, log_failed_service_details, TURBOPI_SERVICES
 
 
 logger = logging.getLogger(__name__)
@@ -106,15 +106,9 @@ def restart_services() -> bool:
     Returns:
         True if all services restarted successfully, False otherwise
     """
-    services = [
-        'turbopi-api.service',
-        'turbopi-ui.service',
-        'turbopi-updater.service'
-    ]
-    
     logger.info("Restarting services in dependency order...")
     
-    for service in services:
+    for service in TURBOPI_SERVICES:
         logger.info(f"Restarting {service}...")
         try:
             result = subprocess.run(
@@ -362,7 +356,7 @@ def apply_update(
                     if new_release_dir:
                         try:
                             update_metadata_health_status(new_release_dir, passed=False)
-                        except (InstallError, OSError, IOError) as meta_err:
+                        except (InstallError, OSError) as meta_err:
                             # Best effort - don't fail rollback if metadata update fails
                             logger.warning(f"Failed to update metadata for failed release: {meta_err}")
                     
@@ -376,8 +370,7 @@ def apply_update(
                 logger.critical("Manual intervention required")
                 
                 # Log service details for debugging
-                services = ['turbopi-api.service', 'turbopi-ui.service', 'turbopi-updater.service']
-                for service in services:
+                for service in TURBOPI_SERVICES:
                     log_failed_service_details(service)
                 
                 raise UpdateError(f"Update failed and rollback failed: {rb_err}")
@@ -385,6 +378,11 @@ def apply_update(
             # No rollback needed, update failed before switching
             logger.error("Update failed before symlink switch - no rollback needed")
             return False
+    
+    except (KeyboardInterrupt, SystemExit):
+        # Let interrupts and system exits propagate
+        logger.warning("Update interrupted by user or system")
+        raise
     
     except Exception as e:
         logger.critical(f"Unexpected error during update: {e}")

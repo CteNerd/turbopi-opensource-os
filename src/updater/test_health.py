@@ -11,8 +11,7 @@ from health import (
     wait_for_service,
     check_all_services,
     verify_release_health,
-    get_service_logs,
-    HealthCheckError
+    get_service_logs
 )
 
 

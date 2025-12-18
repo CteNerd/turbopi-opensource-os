@@ -10,7 +10,7 @@ import tempfile
 import shutil
 import tarfile
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from apply import apply_update
 from install import create_metadata
 
@@ -127,7 +127,7 @@ class TestApplyUpdateIntegration(unittest.TestCase):
         new_version = '0.1.0'
         
         # Create tarball for new version
-        tarball_path = self.create_test_tarball(new_version)
+        self.create_test_tarball(new_version)
         
         # Mock successful operations
         mock_download.return_value = None
@@ -184,7 +184,7 @@ class TestApplyUpdateIntegration(unittest.TestCase):
         new_version = '0.1.0'
         
         # Create tarball for new version
-        tarball_path = self.create_test_tarball(new_version)
+        self.create_test_tarball(new_version)
         
         # Mock operations: health check fails on new version, succeeds on rollback
         mock_download.return_value = None
@@ -229,7 +229,7 @@ class TestApplyUpdateIntegration(unittest.TestCase):
         with patch('apply.restart_services', return_value=True):
             with patch('apply.verify_release_health', return_value=True):
                 # First update: 0.0.9 → 0.1.0
-                tarball_1 = self.create_test_tarball('0.1.0')
+                self.create_test_tarball('0.1.0')
                 result_1 = apply_update(
                     version='0.1.0',
                     download_url='http://example.com/turbopi-0.1.0.tar.gz',
@@ -247,7 +247,7 @@ class TestApplyUpdateIntegration(unittest.TestCase):
                 self.assertIn('0.1.0', current_target)
                 
                 # Second update: 0.1.0 → 0.1.1
-                tarball_2 = self.create_test_tarball('0.1.1')
+                self.create_test_tarball('0.1.1')
                 result_2 = apply_update(
                     version='0.1.1',
                     download_url='http://example.com/turbopi-0.1.1.tar.gz',

@@ -10,19 +10,21 @@ This module handles:
 Follows docs/updater/PROTOCOL.md health check requirements.
 """
 
-import os
 import subprocess
 import time
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 
 
 logger = logging.getLogger(__name__)
 
 
-class HealthCheckError(Exception):
-    """Exception raised when health check fails"""
-    pass
+# Service list constant - shared across health checks
+TURBOPI_SERVICES = [
+    'turbopi-api.service',
+    'turbopi-ui.service',
+    'turbopi-updater.service'
+]
 
 
 def check_service_status(service_name: str) -> bool:
@@ -97,15 +99,9 @@ def check_all_services(timeout_per_service: int = 30) -> Dict[str, bool]:
     Returns:
         Dictionary mapping service names to their status (True = healthy)
     """
-    services = [
-        'turbopi-api.service',
-        'turbopi-ui.service',
-        'turbopi-updater.service'
-    ]
-    
     results = {}
     
-    for service in services:
+    for service in TURBOPI_SERVICES:
         # Wait for service to become active
         results[service] = wait_for_service(service, timeout=timeout_per_service)
     

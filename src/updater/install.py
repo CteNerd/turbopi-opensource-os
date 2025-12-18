@@ -53,19 +53,49 @@ def extract_tarball(tarball_path: str, dest_dir: str) -> None:
     
     # Extract tarball
     try:
+        # Get canonical destination path for security checks
+        dest_real = os.path.realpath(dest_dir)
+        
         with tarfile.open(tarball_path, 'r:gz') as tar:
-            # Security: Check for path traversal attacks
+            # Security: Check for path traversal attacks and unsafe symlinks
             for member in tar.getmembers():
                 member_path = os.path.normpath(member.name)
                 if member_path.startswith('..') or os.path.isabs(member_path):
                     raise InstallError(f"Unsafe path in tarball: {member.name}")
+                
+                # Additional security: ensure symlinks and hardlinks do not point outside dest_dir
+                if member.issym() or member.islnk():
+                    link_target = member.linkname
+                    if link_target:
+                        link_target_norm = os.path.normpath(link_target)
+                        # Resolve link target as if extracted under dest_dir/member_path's directory
+                        link_parent = os.path.dirname(member_path)
+                        resolved_target = os.path.realpath(
+                            os.path.join(dest_real, link_parent, link_target_norm)
+                        )
+                        # Allow links within dest_real only
+                        if not (
+                            resolved_target == dest_real
+                            or resolved_target.startswith(dest_real + os.sep)
+                        ):
+                            raise InstallError(
+                                f"Unsafe symlink in tarball: {member.name} -> {member.linkname}"
+                            )
             
-            # Extract all files
-            tar.extractall(dest_dir)
+            # Extract all files; prefer Python 3.12+ data filter for additional safety
+            try:
+                tar.extractall(path=dest_dir, filter='data')
+            except TypeError:
+                # Older Python versions do not support the 'filter' argument
+                tar.extractall(path=dest_dir)
+            
             logger.info(f"Extracted {len(tar.getmembers())} files")
             
     except tarfile.TarError as e:
         raise InstallError(f"Failed to extract tarball: {e}")
+    except (KeyboardInterrupt, SystemExit):
+        # Let interrupts and system exits propagate
+        raise
     except Exception as e:
         raise InstallError(f"Unexpected error during extraction: {e}")
     

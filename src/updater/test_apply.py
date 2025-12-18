@@ -7,7 +7,7 @@ import os
 import tempfile
 import shutil
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from apply import (
     get_symlink_target,
     atomic_symlink_update,
