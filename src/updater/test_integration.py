@@ -4,14 +4,10 @@ Integration tests for updater service with download functionality.
 """
 
 import os
-import sys
 import tempfile
 import unittest
 import hashlib
 from unittest.mock import patch, MagicMock
-
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(__file__))
 
 from main import UpdaterService
 from download import download_and_verify, DownloadError, ChecksumError

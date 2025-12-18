@@ -52,6 +52,7 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
         with urllib.request.urlopen(url, timeout=timeout) as response:
             total_size = int(response.headers.get('Content-Length', 0))
             downloaded = 0
+            last_logged = 0
             
             with open(destination, 'wb') as f:
                 while True:
@@ -62,12 +63,13 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
                     downloaded += len(chunk)
                     
                     # Log progress every 1MB
-                    if downloaded % (1024 * 1024) == 0:
+                    if downloaded - last_logged >= (1024 * 1024):
                         if total_size > 0:
                             progress = (downloaded / total_size) * 100
                             logger.info(f"Download progress: {progress:.1f}% ({downloaded}/{total_size} bytes)")
                         else:
                             logger.info(f"Downloaded: {downloaded} bytes")
+                        last_logged = downloaded
             
             logger.info(f"Download complete: {downloaded} bytes")
             
