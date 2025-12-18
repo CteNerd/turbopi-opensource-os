@@ -7,7 +7,7 @@ import os
 import tempfile
 import unittest
 import hashlib
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 import urllib.error
 
 from download import (

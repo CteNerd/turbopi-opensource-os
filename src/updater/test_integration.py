@@ -6,11 +6,10 @@ Integration tests for updater service with download functionality.
 import os
 import tempfile
 import unittest
-import hashlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from main import UpdaterService
-from download import download_and_verify, DownloadError, ChecksumError
+from download import DownloadError, ChecksumError
 
 
 class TestUpdaterServiceDownload(unittest.TestCase):
@@ -19,6 +18,14 @@ class TestUpdaterServiceDownload(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         self.temp_dir = tempfile.mkdtemp()
+        
+        # Save original environment variables
+        self.original_env = {
+            'ROBOT_NAME': os.environ.get('ROBOT_NAME'),
+            'AUTO_UPDATE': os.environ.get('AUTO_UPDATE'),
+            'DOWNLOAD_DIR': os.environ.get('DOWNLOAD_DIR'),
+            'LOG_LEVEL': os.environ.get('LOG_LEVEL')
+        }
         
         # Set environment variables
         os.environ['ROBOT_NAME'] = 'TestBot'
@@ -30,6 +37,13 @@ class TestUpdaterServiceDownload(unittest.TestCase):
         """Clean up test environment"""
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+        
+        # Restore original environment variables
+        for key, value in self.original_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
     
     @patch('main.download_and_verify')
     def test_download_update_success(self, mock_download_verify):
@@ -84,7 +98,7 @@ class TestUpdaterServiceDownload(unittest.TestCase):
         
         service = UpdaterService()
         
-        result = service.download_update(
+        service.download_update(
             url="http://example.com/turbopi-0.1.0.tar.gz",
             version="0.1.0",
             expected_checksum="abc123"

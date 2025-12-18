@@ -13,7 +13,6 @@ import hashlib
 import logging
 import urllib.request
 import urllib.error
-from typing import Optional, Tuple
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +44,9 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
     logger.info(f"Saving to {destination}")
     
     # Create destination directory if it doesn't exist
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    destination_dir = os.path.dirname(destination)
+    if destination_dir:
+        os.makedirs(destination_dir, exist_ok=True)
     
     try:
         # Download with progress tracking
