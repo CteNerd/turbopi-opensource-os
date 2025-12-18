@@ -17,13 +17,13 @@ import logging
 
 # Import download and verification functionality
 try:
-    from download import download_and_verify, DownloadError, ChecksumError, _redact_url
+    from download import download_and_verify, DownloadError, ChecksumError, redact_url
 except ImportError:
     # Fallback if running in standalone mode without proper imports
     download_and_verify = None
     DownloadError = Exception
     ChecksumError = Exception
-    _redact_url = lambda url: url  # Simple passthrough if import fails
+    redact_url = lambda url: url  # Simple passthrough if import fails
 
 
 class UpdaterService:
@@ -75,7 +75,7 @@ class UpdaterService:
             dest_file = os.path.join(dest_dir, f"turbopi-{version}.tar.gz")
             
             logging.info(f"Starting update download for version {version}")
-            logging.info(f"Download URL: {_redact_url(url)}")
+            logging.info(f"Download URL: {redact_url(url)}")
             logging.info(f"Destination: {dest_file}")
             
             # Download and verify

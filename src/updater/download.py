@@ -34,21 +34,38 @@ class ChecksumError(Exception):
     pass
 
 
-def _redact_url(url: str) -> str:
+def redact_url(url: str) -> str:
     """
     Redact sensitive information from URLs for safe logging.
     
     Removes query parameters and authentication credentials to prevent
-    leaking secrets in logs.
+    leaking secrets in logs. This is a public API used by the updater service.
     
     Args:
         url: Original URL that may contain sensitive information
         
     Returns:
         Redacted URL safe for logging (without query params and credentials)
+    
+    Examples:
+        >>> redact_url("http://user:pass@host/path")
+        'http://host/path'
+        >>> redact_url("http://host/path?token=secret")
+        'http://host/path'
+        >>> redact_url("http://host:8080/path")
+        'http://host:8080/path'
     """
     try:
+        # Basic validation - URL should have a scheme and netloc for meaningful redaction
+        if not url or not url.strip():
+            return "<url-redacted>"
+        
         parsed = urlparse(url)
+        
+        # If no scheme or netloc, it's not a valid URL we can redact
+        if not parsed.scheme or not parsed.netloc:
+            return "<url-redacted>"
+        
         # Build netloc without credentials, preserving hostname and port
         if parsed.hostname:
             netloc = parsed.hostname
@@ -88,7 +105,7 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
     Raises:
         DownloadError: If download fails
     """
-    logger.info(f"Downloading from {_redact_url(url)}")
+    logger.info(f"Downloading from {redact_url(url)}")
     logger.info(f"Saving to {destination}")
     
     # Create destination directory if it doesn't exist
@@ -123,12 +140,12 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
             logger.info(f"Download complete: {downloaded} bytes")
             
     except urllib.error.HTTPError as e:
-        error_msg = f"HTTP error downloading {_redact_url(url)}: {e.code} {e.reason}"
+        error_msg = f"HTTP error downloading {redact_url(url)}: {e.code} {e.reason}"
         logger.error(error_msg)
         raise DownloadError(error_msg) from e
         
     except urllib.error.URLError as e:
-        error_msg = f"Network error downloading {_redact_url(url)}: {e.reason}"
+        error_msg = f"Network error downloading {redact_url(url)}: {e.reason}"
         logger.error(error_msg)
         raise DownloadError(error_msg) from e
         
@@ -138,7 +155,7 @@ def download_file(url: str, destination: str, timeout: int = 300) -> None:
         raise DownloadError(error_msg) from e
         
     except Exception as e:
-        error_msg = f"Unexpected error downloading {_redact_url(url)}: {e}"
+        error_msg = f"Unexpected error downloading {redact_url(url)}: {e}"
         logger.error(error_msg)
         raise DownloadError(error_msg) from e
 
@@ -225,7 +242,7 @@ def download_and_verify(url: str, destination: str, expected_checksum: str,
         DownloadError: If download fails
         ChecksumError: If checksum verification fails
     """
-    logger.info(f"Starting download and verification from {_redact_url(url)}")
+    logger.info(f"Starting download and verification from {redact_url(url)}")
     
     try:
         # Download the file

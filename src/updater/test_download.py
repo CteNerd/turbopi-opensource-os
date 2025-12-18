@@ -15,9 +15,91 @@ from download import (
     calculate_sha256,
     verify_checksum,
     download_and_verify,
+    redact_url,
     DownloadError,
     ChecksumError
 )
+
+
+class TestRedactUrl(unittest.TestCase):
+    """Tests for URL redaction functionality"""
+    
+    def test_redact_url_with_credentials(self):
+        """Test that credentials are removed from URLs"""
+        url = "http://user:pass@host.com/path"
+        result = redact_url(url)
+        self.assertEqual(result, "http://host.com/path")
+        self.assertNotIn("user", result)
+        self.assertNotIn("pass", result)
+    
+    def test_redact_url_with_query_parameters(self):
+        """Test that query parameters are removed"""
+        url = "http://host.com/path?token=secret123&key=value"
+        result = redact_url(url)
+        self.assertEqual(result, "http://host.com/path")
+        self.assertNotIn("token", result)
+        self.assertNotIn("secret123", result)
+    
+    def test_redact_url_preserves_port(self):
+        """Test that port numbers are preserved"""
+        url = "http://host.com:8080/path"
+        result = redact_url(url)
+        self.assertEqual(result, "http://host.com:8080/path")
+        self.assertIn(":8080", result)
+    
+    def test_redact_url_with_credentials_and_port(self):
+        """Test that credentials are removed but port is preserved"""
+        url = "https://myuser:mypass@api.github.com:443/download/v1.0.0/file.tar.gz"
+        result = redact_url(url)
+        self.assertEqual(result, "https://api.github.com:443/download/v1.0.0/file.tar.gz")
+        self.assertNotIn("myuser", result)
+        self.assertNotIn("mypass", result)
+        self.assertIn(":443", result)
+    
+    def test_redact_url_with_everything(self):
+        """Test URL with credentials, port, query params, and fragment"""
+        url = "https://user:pass@host.com:9000/path?token=secret#section"
+        result = redact_url(url)
+        self.assertEqual(result, "https://host.com:9000/path")
+        self.assertNotIn("user", result)
+        self.assertNotIn("pass", result)
+        self.assertNotIn("token", result)
+        self.assertNotIn("secret", result)
+        self.assertNotIn("#section", result)
+        self.assertIn(":9000", result)
+    
+    def test_redact_url_public_url_unchanged(self):
+        """Test that public URLs without credentials remain unchanged"""
+        url = "https://github.com/user/repo/releases/download/v1.0.0/file.tar.gz"
+        result = redact_url(url)
+        self.assertEqual(result, url)
+    
+    def test_redact_url_localhost_with_port(self):
+        """Test localhost URLs with custom ports"""
+        url = "http://localhost:8000/download"
+        result = redact_url(url)
+        self.assertEqual(result, "http://localhost:8000/download")
+    
+    def test_redact_url_invalid_returns_placeholder(self):
+        """Test that invalid URLs return safe placeholder or handle gracefully"""
+        # Some invalid URLs might be partially parsed, so we just ensure
+        # no exception is raised and the function returns a string
+        invalid_urls = ["not a url", "://missing-scheme", ""]
+        for url in invalid_urls:
+            result = redact_url(url)
+            # Should return a string (either redacted or partially parsed)
+            self.assertIsInstance(result, str)
+            # For completely invalid URLs, should return placeholder
+            if not url or url.startswith("://"):
+                self.assertIn("redacted", result.lower())
+    
+    def test_redact_url_https_with_query(self):
+        """Test HTTPS URLs with query parameters"""
+        url = "https://api.example.com/repos/user/repo/tarball?access_token=ghp_secret123"
+        result = redact_url(url)
+        self.assertEqual(result, "https://api.example.com/repos/user/repo/tarball")
+        self.assertNotIn("access_token", result)
+        self.assertNotIn("ghp_secret123", result)
 
 
 class TestCalculateSha256(unittest.TestCase):
