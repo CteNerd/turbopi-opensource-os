@@ -362,8 +362,9 @@ def apply_update(
                     if new_release_dir:
                         try:
                             update_metadata_health_status(new_release_dir, passed=False)
-                        except:
-                            pass  # Best effort
+                        except (InstallError, OSError, IOError) as meta_err:
+                            # Best effort - don't fail rollback if metadata update fails
+                            logger.warning(f"Failed to update metadata for failed release: {meta_err}")
                     
                     return False
                 else:

@@ -85,9 +85,10 @@ class TestWaitForService(unittest.TestCase):
     @patch('time.time')
     def test_wait_for_service_becomes_active(self, mock_time, mock_sleep, mock_check):
         """Test service that becomes active after waiting"""
-        # Simulate time progression
-        # More time values needed to account for all time.time() calls in the function
-        mock_time.side_effect = [0, 2, 2, 4, 4, 6]  # Multiple calls per iteration
+        # Simulate time progression: wait_for_service() calls time.time() twice per loop:
+        # once for elapsed time calculation and once for timeout check
+        # Values: start=0, loop1_start=2, loop1_end=2, loop2_start=4, loop2_end=4, final=6
+        mock_time.side_effect = [0, 2, 2, 4, 4, 6]
         mock_check.side_effect = [False, True]  # Inactive first, then active
         
         result = wait_for_service('turbopi-api.service', timeout=10, poll_interval=2)
@@ -100,7 +101,9 @@ class TestWaitForService(unittest.TestCase):
     @patch('time.time')
     def test_wait_for_service_timeout(self, mock_time, mock_sleep, mock_check):
         """Test service that never becomes active"""
-        # Simulate time progression past timeout
+        # Simulate time progression past timeout (10s)
+        # Each iteration uses time.time() twice, progressing in 2s poll intervals
+        # After 5 loops (10s), the timeout condition triggers
         mock_time.side_effect = [0, 2, 4, 6, 8, 10, 12]
         mock_check.return_value = False  # Always inactive
         
