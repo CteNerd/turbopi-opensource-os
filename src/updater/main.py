@@ -6,6 +6,7 @@ This is a minimal skeleton implementation that provides:
 - Background service for update management
 - Basic logging
 - Configuration loading from environment variables
+- Download and verification support
 """
 
 import os
@@ -13,6 +14,16 @@ import sys
 import time
 import signal
 import logging
+
+# Import download and verification functionality
+try:
+    from download import download_and_verify, DownloadError, ChecksumError, redact_url
+except ImportError:
+    # Fallback if running in standalone mode without proper imports
+    download_and_verify = None
+    DownloadError = Exception
+    ChecksumError = Exception
+    redact_url = lambda url: url  # Simple passthrough if import fails
 
 
 class UpdaterService:
@@ -22,6 +33,7 @@ class UpdaterService:
         self.running = True
         self.robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
         self.auto_update = os.environ.get('AUTO_UPDATE', 'false').lower() == 'true'
+        self.download_dir = os.environ.get('DOWNLOAD_DIR', '/opt/turbopi/downloads')
         
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
@@ -31,6 +43,61 @@ class UpdaterService:
         """Handle shutdown signals gracefully"""
         logging.info(f"Received signal {signum}, shutting down updater service...")
         self.running = False
+    
+    def download_update(self, url: str, version: str, expected_checksum: str) -> bool:
+        """
+        Download and verify an update artifact.
+        
+        This implements the download and verification steps from docs/updater/PROTOCOL.md:
+        - Download artifact + checksum
+        - Verify checksum
+        - Reject invalid checksums
+        - Fail safely
+        
+        URLs are automatically redacted in logs to prevent credential leakage.
+        
+        Args:
+            url: URL to download the update artifact from (redacted in logs)
+            version: Version string for the update (e.g., "0.1.0")
+            expected_checksum: Expected SHA256 checksum
+            
+        Returns:
+            True if download and verification succeeded, False otherwise
+        """
+        if download_and_verify is None:
+            logging.error("Download functionality not available")
+            return False
+        
+        try:
+            # Determine destination path
+            dest_dir = os.path.join(self.download_dir, version)
+            os.makedirs(dest_dir, exist_ok=True)
+            dest_file = os.path.join(dest_dir, f"turbopi-{version}.tar.gz")
+            
+            logging.info(f"Starting update download for version {version}")
+            logging.info(f"Download URL: {redact_url(url)}")
+            logging.info(f"Destination: {dest_file}")
+            
+            # Download and verify
+            download_and_verify(url, dest_file, expected_checksum)
+            
+            logging.info(f"Update download and verification successful for version {version}")
+            return True
+            
+        except ChecksumError as e:
+            logging.error(f"Checksum verification failed for version {version}: {e}")
+            logging.error("Invalid checksum prevents install - update rejected")
+            return False
+            
+        except DownloadError as e:
+            logging.error(f"Download failed for version {version}: {e}")
+            logging.error("Download error prevents install - update rejected")
+            return False
+            
+        except Exception as e:
+            logging.error(f"Unexpected error downloading version {version}: {e}")
+            logging.error("Unexpected error prevents install - update rejected")
+            return False
 
     def run(self):
         """Main service loop"""
