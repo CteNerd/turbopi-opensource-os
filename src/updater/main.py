@@ -18,11 +18,14 @@ import logging
 # Import download and verification functionality
 try:
     from download import download_and_verify, DownloadError, ChecksumError, redact_url
+    from apply import apply_update, UpdateError
 except ImportError:
     # Fallback if running in standalone mode without proper imports
     download_and_verify = None
+    apply_update = None
     DownloadError = Exception
     ChecksumError = Exception
+    UpdateError = Exception
     redact_url = lambda url: url  # Simple passthrough if import fails
 
 
@@ -97,6 +100,70 @@ class UpdaterService:
         except Exception as e:
             logging.error(f"Unexpected error downloading version {version}: {e}")
             logging.error("Unexpected error prevents install - update rejected")
+            return False
+    
+    def apply_update_to_system(
+        self,
+        version: str,
+        url: str,
+        checksum: str,
+        requires_reboot: bool = False
+    ) -> bool:
+        """
+        Apply a complete update to the system.
+        
+        This orchestrates the full update flow from docs/updater/PROTOCOL.md:
+        1. Download and verify
+        2. Extract to releases/<version>
+        3. Atomic symlink switch
+        4. Restart services
+        5. Health check
+        6. Rollback on failure
+        
+        Args:
+            version: Version to install (e.g., "0.1.0")
+            url: URL to download from (redacted in logs)
+            checksum: Expected SHA256 checksum
+            requires_reboot: Whether this update requires a reboot
+            
+        Returns:
+            True if update succeeded, False if failed or rolled back
+        """
+        if apply_update is None:
+            logging.error("Update orchestration functionality not available")
+            return False
+        
+        logging.info(f"Applying update to version {version}")
+        logging.info(f"Download URL: {redact_url(url)}")
+        logging.info(f"Requires reboot: {requires_reboot}")
+        
+        try:
+            result = apply_update(
+                version=version,
+                download_url=url,
+                checksum=checksum,
+                download_dir=self.download_dir,
+                requires_reboot=requires_reboot
+            )
+            
+            if result:
+                logging.info(f"Update to version {version} completed successfully")
+                if requires_reboot:
+                    logging.warning("!!! REBOOT REQUIRED !!!")
+                    logging.warning("Please reboot the system to complete the update")
+            else:
+                logging.error(f"Update to version {version} failed")
+            
+            return result
+            
+        except UpdateError as e:
+            logging.critical(f"Update failed with error: {e}")
+            logging.critical("System may require manual intervention")
+            return False
+            
+        except Exception as e:
+            logging.critical(f"Unexpected error during update: {e}")
+            logging.critical("Update aborted")
             return False
 
     def run(self):
