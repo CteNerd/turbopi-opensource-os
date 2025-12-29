@@ -14,6 +14,7 @@ import json
 import logging
 import urllib.request
 import urllib.error
+from typing import Optional
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 
@@ -76,12 +77,13 @@ def is_newer_version(current: str, latest: str) -> bool:
     return latest_tuple > current_tuple
 
 
-def fetch_latest_stable_release() -> dict | None:
+def fetch_latest_stable_release() -> Optional[dict]:
     """
     Fetch the latest stable release information from GitHub API.
     
     Returns:
         Dictionary with 'version' and 'url' keys, or None if fetch fails
+        or if essential fields are missing from the response
     """
     github_api_url = "https://api.github.com/repos/CteNerd/turbopi-opensource-os/releases/latest"
     
@@ -95,15 +97,24 @@ def fetch_latest_stable_release() -> dict | None:
             
             # Extract version from tag_name (e.g., "v0.1.0" -> "0.1.0")
             tag_name = data.get('tag_name', '')
+            if not tag_name:
+                # Missing essential field - return None for consistency
+                logging.error("GitHub API response missing 'tag_name' field")
+                return None
+            
             version = tag_name.lstrip('v')
             
             # Find the release artifact URL (tar.gz file)
             assets = data.get('assets', [])
             url = None
             for asset in assets:
-                if asset['name'].endswith('.tar.gz'):
-                    url = asset['browser_download_url']
-                    break
+                # Use defensive programming to handle missing fields
+                asset_name = asset.get('name', '')
+                if isinstance(asset_name, str) and asset_name.endswith('.tar.gz'):
+                    candidate_url = asset.get('browser_download_url', '')
+                    if candidate_url:
+                        url = candidate_url
+                        break
             
             # If no asset found, use tarball_url as fallback
             if not url:

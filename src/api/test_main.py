@@ -211,10 +211,8 @@ class TestFetchLatestStableRelease(unittest.TestCase):
         
         result = fetch_latest_stable_release()
         
-        # Should return a result with empty version and url
-        self.assertIsNotNone(result)
-        self.assertEqual(result['version'], '')
-        self.assertEqual(result['url'], '')
+        # Should return None when essential field tag_name is missing
+        self.assertIsNone(result)
 
 
 if __name__ == '__main__':

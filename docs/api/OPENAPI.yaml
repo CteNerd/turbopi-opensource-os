@@ -37,7 +37,7 @@ paths:
                 type: object
                 properties:
                   current: { type: string }
-                  latest_stable: { type: string }
+                  latest_stable: { type: string, nullable: true }
 
   /system/restart:
     post:
@@ -64,7 +64,7 @@ paths:
                 type: object
                 properties:
                   update_available: { type: boolean }
-                  latest_version: { type: string }
+                  latest_version: { type: string, nullable: true }
 
   /updates/apply:
     post:
