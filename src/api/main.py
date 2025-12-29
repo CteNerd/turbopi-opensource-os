@@ -76,7 +76,7 @@ def is_newer_version(current: str, latest: str) -> bool:
     return latest_tuple > current_tuple
 
 
-def fetch_latest_stable_release() -> dict:
+def fetch_latest_stable_release() -> dict | None:
     """
     Fetch the latest stable release information from GitHub API.
     
@@ -165,7 +165,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 pass
 
             # Get version from environment or default
-            version = os.environ.get('VERSION', '0.1.0-dev')
+            version = get_current_version()
 
             health_data = {
                 'status': 'ok',
