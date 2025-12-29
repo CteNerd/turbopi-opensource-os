@@ -110,10 +110,9 @@ def fetch_latest_stable_release() -> Optional[dict]:
             for asset in assets:
                 # Use defensive programming to handle missing fields
                 asset_name = asset.get('name', '')
-                if isinstance(asset_name, str) and asset_name.endswith('.tar.gz'):
-                    candidate_url = asset.get('browser_download_url', '')
-                    if candidate_url:
-                        url = candidate_url
+                if asset_name.endswith('.tar.gz'):
+                    url = asset.get('browser_download_url')
+                    if url:
                         break
             
             # If no asset found, use tarball_url as fallback
