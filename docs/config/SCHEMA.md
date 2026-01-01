@@ -18,6 +18,7 @@ MAX_ANGULAR_SPEED=1.2
 DEADMAN_TIMEOUT_MS=500
 
 AUTO_UPDATE=false
+DOWNLOAD_DIR=/opt/turbopi/downloads
 
 ## Rules
 
