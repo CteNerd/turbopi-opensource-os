@@ -526,6 +526,9 @@ class TestApplyUpdate(unittest.TestCase):
         
         # Verify restart was called twice
         self.assertEqual(mock_restart.call_count, 2)
+        
+        # Verify health check was called after rollback
+        self.assertEqual(mock_health.call_count, 1)
     
     @patch('apply.download_and_verify')
     @patch('apply.install_release')
@@ -632,6 +635,49 @@ class TestApplyUpdate(unittest.TestCase):
         
         # Metadata update fails (should not prevent rollback success)
         mock_update_meta.side_effect = InstallError("Metadata write failed")
+        
+        # Execute update
+        result = apply_update(
+            version='0.1.0',
+            download_url='http://example.com/release.tar.gz',
+            checksum='abc123'
+        )
+        
+        # Should return False (update failed, but rollback succeeded)
+        self.assertFalse(result)
+        
+        # Verify rollback completed successfully despite metadata failure
+        mock_rollback.assert_called_once()
+        mock_update_meta.assert_called_once()
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.rollback_to_previous')
+    @patch('apply.update_metadata_health_status')
+    def test_apply_update_rollback_metadata_oserror_non_critical(
+        self,
+        mock_update_meta,
+        mock_rollback,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test rollback succeeds even if metadata update raises OSError"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        mock_restart.return_value = True
+        
+        # First health check fails, second succeeds
+        mock_health.side_effect = [False, True]
+        
+        # Metadata update raises OSError (should not prevent rollback success)
+        mock_update_meta.side_effect = OSError("Permission denied")
         
         # Execute update
         result = apply_update(
