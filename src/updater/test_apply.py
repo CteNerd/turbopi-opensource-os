@@ -18,6 +18,8 @@ from apply import (
     UpdateError,
     RollbackError
 )
+from download import DownloadError, ChecksumError
+from install import InstallError
 
 
 class TestGetSymlinkTarget(unittest.TestCase):
@@ -282,7 +284,6 @@ class TestApplyUpdate(unittest.TestCase):
     @patch('apply.download_and_verify')
     def test_apply_update_download_failure(self, mock_download):
         """Test update aborts on download failure"""
-        from download import DownloadError
         mock_download.side_effect = DownloadError("Network error")
         
         result = apply_update(
@@ -298,7 +299,6 @@ class TestApplyUpdate(unittest.TestCase):
     @patch('apply.install_release')
     def test_apply_update_install_failure(self, mock_install, mock_download):
         """Test update aborts on install failure"""
-        from install import InstallError
         mock_install.side_effect = InstallError("Extract failed")
         
         result = apply_update(
@@ -631,7 +631,6 @@ class TestApplyUpdate(unittest.TestCase):
         mock_health.side_effect = [False, True]
         
         # Metadata update fails (should not prevent rollback success)
-        from install import InstallError
         mock_update_meta.side_effect = InstallError("Metadata write failed")
         
         # Execute update
@@ -651,7 +650,6 @@ class TestApplyUpdate(unittest.TestCase):
     @patch('apply.download_and_verify')
     def test_apply_update_checksum_failure(self, mock_download):
         """Test update aborts on checksum verification failure"""
-        from download import ChecksumError
         mock_download.side_effect = ChecksumError("Checksum mismatch")
         
         result = apply_update(
