@@ -387,6 +387,374 @@ class TestApplyUpdate(unittest.TestCase):
             )
         
         self.assertIn('rollback failed', str(cm.exception).lower())
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.update_metadata_health_status')
+    def test_apply_update_skip_download(
+        self,
+        mock_update_meta,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test update with skip_download when tarball exists"""
+        # Create temporary tarball
+        temp_dir = tempfile.mkdtemp()
+        try:
+            tarball_path = os.path.join(temp_dir, '0.1.0', 'turbopi-0.1.0.tar.gz')
+            os.makedirs(os.path.dirname(tarball_path))
+            with open(tarball_path, 'w') as f:
+                f.write('fake tarball')
+            
+            # Setup mocks
+            mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+            mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+            mock_restart.return_value = True
+            mock_health.return_value = True
+            
+            # Execute update with skip_download
+            result = apply_update(
+                version='0.1.0',
+                download_url='http://example.com/release.tar.gz',
+                checksum='abc123',
+                download_dir=temp_dir,
+                skip_download=True
+            )
+            
+            # Verify success
+            self.assertTrue(result)
+            
+            # Verify download was NOT called
+            mock_download.assert_not_called()
+            
+            # Verify other steps were called
+            mock_install.assert_called_once()
+            mock_switch.assert_called_once()
+            mock_restart.assert_called_once()
+            mock_health.assert_called_once()
+            
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.update_metadata_health_status')
+    def test_apply_update_requires_reboot(
+        self,
+        mock_update_meta,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test update with requires_reboot flag"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        mock_restart.return_value = True
+        mock_health.return_value = True
+        
+        # Execute update with requires_reboot
+        result = apply_update(
+            version='0.1.0',
+            download_url='http://example.com/release.tar.gz',
+            checksum='abc123',
+            requires_reboot=True
+        )
+        
+        # Verify success
+        self.assertTrue(result)
+        
+        # Verify install was called with requires_reboot=True
+        install_call_kwargs = mock_install.call_args[1]
+        self.assertTrue(install_call_kwargs.get('requires_reboot'))
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.rollback_to_previous')
+    @patch('apply.update_metadata_health_status')
+    def test_apply_update_restart_failure_rollback(
+        self,
+        mock_update_meta,
+        mock_rollback,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test rollback when service restart fails after switch"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        
+        # First restart (after switch) fails, second (after rollback) succeeds
+        mock_restart.side_effect = [False, True]
+        
+        # Health check after rollback succeeds
+        mock_health.return_value = True
+        
+        # Execute update
+        result = apply_update(
+            version='0.1.0',
+            download_url='http://example.com/release.tar.gz',
+            checksum='abc123'
+        )
+        
+        # Should return False (update failed)
+        self.assertFalse(result)
+        
+        # Verify rollback was attempted
+        mock_rollback.assert_called_once_with(
+            '/opt/turbopi/releases/0.0.9',
+            None,
+            '/opt/turbopi'
+        )
+        
+        # Verify restart was called twice
+        self.assertEqual(mock_restart.call_count, 2)
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.rollback_to_previous')
+    def test_apply_update_rollback_restart_failure(
+        self,
+        mock_rollback,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test critical error when rollback restart fails"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        
+        # First restart succeeds, health check fails
+        mock_restart.side_effect = [True, False]  # Second restart (after rollback) fails
+        mock_health.return_value = False
+        
+        # Execute update - should raise UpdateError
+        with self.assertRaises(UpdateError) as cm:
+            apply_update(
+                version='0.1.0',
+                download_url='http://example.com/release.tar.gz',
+                checksum='abc123'
+            )
+        
+        self.assertIn('rollback', str(cm.exception).lower())
+        
+        # Verify rollback was attempted
+        mock_rollback.assert_called_once()
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.rollback_to_previous')
+    def test_apply_update_rollback_health_failure(
+        self,
+        mock_rollback,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test critical error when rollback health check fails"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        mock_restart.return_value = True
+        
+        # Both health checks fail
+        mock_health.return_value = False
+        
+        # Execute update - should raise UpdateError
+        with self.assertRaises(UpdateError) as cm:
+            apply_update(
+                version='0.1.0',
+                download_url='http://example.com/release.tar.gz',
+                checksum='abc123'
+            )
+        
+        self.assertIn('rollback', str(cm.exception).lower())
+        
+        # Verify rollback was attempted
+        mock_rollback.assert_called_once()
+        
+        # Verify health check was called twice
+        self.assertEqual(mock_health.call_count, 2)
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.rollback_to_previous')
+    @patch('apply.update_metadata_health_status')
+    def test_apply_update_rollback_metadata_failure_non_critical(
+        self,
+        mock_update_meta,
+        mock_rollback,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test rollback succeeds even if metadata update fails"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        mock_restart.return_value = True
+        
+        # First health check fails, second succeeds
+        mock_health.side_effect = [False, True]
+        
+        # Metadata update fails (should not prevent rollback success)
+        from install import InstallError
+        mock_update_meta.side_effect = InstallError("Metadata write failed")
+        
+        # Execute update
+        result = apply_update(
+            version='0.1.0',
+            download_url='http://example.com/release.tar.gz',
+            checksum='abc123'
+        )
+        
+        # Should return False (update failed, but rollback succeeded)
+        self.assertFalse(result)
+        
+        # Verify rollback completed successfully despite metadata failure
+        mock_rollback.assert_called_once()
+        mock_update_meta.assert_called_once()
+    
+    @patch('apply.download_and_verify')
+    def test_apply_update_checksum_failure(self, mock_download):
+        """Test update aborts on checksum verification failure"""
+        from download import ChecksumError
+        mock_download.side_effect = ChecksumError("Checksum mismatch")
+        
+        result = apply_update(
+            version='0.1.0',
+            download_url='http://example.com/release.tar.gz',
+            checksum='abc123'
+        )
+        
+        # Should return False without attempting rollback
+        self.assertFalse(result)
+    
+    @patch('apply.download_and_verify')
+    @patch('apply.install_release')
+    @patch('apply.switch_to_release')
+    @patch('apply.restart_services')
+    @patch('apply.verify_release_health')
+    @patch('apply.rollback_to_previous')
+    def test_apply_update_switch_failure_rollback(
+        self,
+        mock_rollback,
+        mock_health,
+        mock_restart,
+        mock_switch,
+        mock_install,
+        mock_download
+    ):
+        """Test rollback when symlink switch fails"""
+        # Setup mocks
+        mock_install.return_value = '/opt/turbopi/releases/0.1.0'
+        mock_switch.side_effect = UpdateError("Symlink switch failed")
+        
+        # Execute update
+        result = apply_update(
+            version='0.1.0',
+            download_url='http://example.com/release.tar.gz',
+            checksum='abc123'
+        )
+        
+        # Should return False
+        self.assertFalse(result)
+        
+        # Verify rollback was NOT attempted (switch failed, so old_current is None)
+        mock_rollback.assert_not_called()
+        
+        # Verify restart was NOT called
+        mock_restart.assert_not_called()
+
+
+class TestSwitchToReleaseEdgeCases(unittest.TestCase):
+    """Tests for edge cases in release switching"""
+    
+    def setUp(self):
+        """Set up test environment"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.turbopi_root = self.temp_dir
+        
+        # Create new release directory
+        self.new_release = os.path.join(self.temp_dir, 'releases', '0.1.1')
+        os.makedirs(self.new_release)
+    
+    def tearDown(self):
+        """Clean up test environment"""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    
+    @patch('apply.atomic_symlink_update')
+    def test_switch_to_release_no_previous_symlink(self, mock_update):
+        """Test release switch when no previous symlink exists"""
+        # No current symlink exists (fresh install scenario)
+        old_current, old_previous = switch_to_release(
+            self.new_release,
+            self.turbopi_root
+        )
+        
+        # Verify old_current is None
+        self.assertIsNone(old_current)
+        self.assertIsNone(old_previous)
+        
+        # Verify only current symlink was created (no previous update)
+        self.assertEqual(mock_update.call_count, 1)
+        
+        # Verify current was set to new release
+        curr_link = os.path.join(self.turbopi_root, 'current')
+        self.assertEqual(mock_update.call_args[0], (curr_link, self.new_release))
+
+
+class TestRollbackToPreviousEdgeCases(unittest.TestCase):
+    """Tests for edge cases in rollback functionality"""
+    
+    @patch('apply.atomic_symlink_update')
+    def test_rollback_no_old_previous(self, mock_update):
+        """Test rollback with no old_previous (maintains chain)"""
+        turbopi_root = '/opt/turbopi'
+        old_current = '/opt/turbopi/releases/0.1.0'
+        old_previous = None  # No previous-previous release
+        
+        rollback_to_previous(old_current, old_previous, turbopi_root)
+        
+        # Verify only current was restored (no previous update since old_previous is None)
+        self.assertEqual(mock_update.call_count, 1)
+        
+        # Verify current was restored
+        curr_link = os.path.join(turbopi_root, 'current')
+        self.assertEqual(mock_update.call_args[0], (curr_link, old_current))
 
 
 if __name__ == '__main__':
