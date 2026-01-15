@@ -29,6 +29,7 @@ fi
 echo "Creating directories..."
 mkdir -p /opt/turbopi/current/bin
 mkdir -p /opt/turbopi/current/src
+mkdir -p /opt/turbopi/downloads
 mkdir -p /etc/turbopi
 mkdir -p /var/log/turbopi
 
