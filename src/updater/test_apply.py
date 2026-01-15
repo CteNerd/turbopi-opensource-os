@@ -667,7 +667,7 @@ class TestApplyUpdate(unittest.TestCase):
     @patch('apply.restart_services')
     @patch('apply.verify_release_health')
     @patch('apply.rollback_to_previous')
-    def test_apply_update_switch_failure_rollback(
+    def test_apply_update_switch_failure_no_rollback(
         self,
         mock_rollback,
         mock_health,
@@ -676,7 +676,7 @@ class TestApplyUpdate(unittest.TestCase):
         mock_install,
         mock_download
     ):
-        """Test rollback when symlink switch fails"""
+        """Test no rollback when symlink switch fails (old_current is None)"""
         # Setup mocks
         mock_install.return_value = '/opt/turbopi/releases/0.1.0'
         mock_switch.side_effect = UpdateError("Symlink switch failed")
