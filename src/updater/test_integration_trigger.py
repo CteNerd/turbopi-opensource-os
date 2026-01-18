@@ -55,7 +55,7 @@ def test_updater_processes_trigger():
                 result = service.check_for_update_trigger()
                 
                 # Verify trigger was processed
-                assert result == True, "Expected trigger to be processed"
+                assert result, "Expected trigger to be processed"
                 
                 # Verify apply_update_to_system was called with correct parameters
                 mock_apply.assert_called_once_with(
@@ -103,7 +103,7 @@ def test_updater_handles_invalid_trigger():
             result = service.check_for_update_trigger()
             
             # Verify trigger was not processed (invalid)
-            assert result == False, "Expected invalid trigger to be rejected"
+            assert not result, "Expected invalid trigger to be rejected"
             print("✓ Invalid trigger rejected")
         
         # Verify invalid trigger file was removed
@@ -131,7 +131,7 @@ def test_updater_no_trigger_file():
             result = service.check_for_update_trigger()
             
             # Verify no trigger was processed
-            assert result == False, "Expected no trigger to be found"
+            assert not result, "Expected no trigger to be found"
             print("✓ No trigger file - gracefully handled")
     
     finally:
