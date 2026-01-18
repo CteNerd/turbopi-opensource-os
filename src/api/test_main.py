@@ -213,6 +213,102 @@ class TestFetchLatestStableRelease(unittest.TestCase):
         
         # Should return None when essential field tag_name is missing
         self.assertIsNone(result)
+    
+    @patch('urllib.request.urlopen')
+    def test_fetch_with_checksum_asset(self, mock_urlopen):
+        """Test fetching release with checksum asset file"""
+        checksum_value = 'abc123def456'
+        mock_release_data = {
+            'tag_name': 'v1.0.0',
+            'assets': [
+                {
+                    'name': 'turbopi-1.0.0.tar.gz',
+                    'browser_download_url': 'https://example.com/turbopi-1.0.0.tar.gz'
+                },
+                {
+                    'name': 'turbopi-1.0.0.tar.gz.sha256',
+                    'browser_download_url': 'https://example.com/turbopi-1.0.0.tar.gz.sha256'
+                }
+            ]
+        }
+        
+        # Create two mock responses - one for release API, one for checksum file
+        mock_release_response = MagicMock()
+        mock_release_response.read.return_value = json.dumps(mock_release_data).encode()
+        
+        mock_checksum_response = MagicMock()
+        mock_checksum_response.read.return_value = f'{checksum_value}  turbopi-1.0.0.tar.gz'.encode()
+        
+        # First call gets release data, second call gets checksum
+        mock_urlopen.return_value.__enter__.side_effect = [mock_release_response, mock_checksum_response]
+        
+        result = fetch_latest_stable_release()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result['version'], '1.0.0')
+        self.assertEqual(result['checksum'], checksum_value)
+    
+    @patch('urllib.request.urlopen')
+    def test_fetch_with_checksum_in_body(self, mock_urlopen):
+        """Test extracting checksum from release body"""
+        checksum_value = 'abc123def456' + '0' * 52  # 64 char hex
+        mock_release_data = {
+            'tag_name': 'v1.0.0',
+            'assets': [
+                {
+                    'name': 'turbopi-1.0.0.tar.gz',
+                    'browser_download_url': 'https://example.com/turbopi-1.0.0.tar.gz'
+                }
+            ],
+            'body': f'Release notes\n\nSHA256: {checksum_value}\n\nMore text'
+        }
+        
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(mock_release_data).encode()
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        result = fetch_latest_stable_release()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result['version'], '1.0.0')
+        self.assertEqual(result['checksum'], checksum_value.lower())
+
+
+class TestTriggerSystemUpdate(unittest.TestCase):
+    """Tests for trigger_system_update function"""
+    
+    def setUp(self):
+        """Set up test environment"""
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp()
+    
+    def tearDown(self):
+        """Clean up test environment"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    
+    @patch('os.makedirs')
+    @patch('builtins.open', new_callable=unittest.mock.mock_open)
+    def test_trigger_creates_file(self, mock_open, mock_makedirs):
+        """Test that trigger creates the trigger file"""
+        from main import trigger_system_update
+        
+        version = '1.0.0'
+        url = 'https://example.com/release.tar.gz'
+        checksum = 'abc123'
+        
+        # Mock makedirs to succeed
+        mock_makedirs.return_value = None
+        
+        trigger_system_update(version, url, checksum)
+        
+        # Verify makedirs was called
+        mock_makedirs.assert_called_once()
+        
+        # Verify file was opened for writing
+        mock_open.assert_called_once()
+        self.assertIn('update-trigger.json', mock_open.call_args[0][0])
+        self.assertEqual('w', mock_open.call_args[0][1])
 
 
 if __name__ == '__main__':

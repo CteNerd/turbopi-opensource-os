@@ -14,6 +14,7 @@ import sys
 import time
 import signal
 import logging
+import json
 
 # Import download and verification functionality
 try:
@@ -37,6 +38,8 @@ class UpdaterService:
         self.robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
         self.auto_update = os.environ.get('AUTO_UPDATE', 'false').lower() == 'true'
         self.download_dir = os.environ.get('DOWNLOAD_DIR', '/opt/turbopi/downloads')
+        self.trigger_dir = os.environ.get('TRIGGER_DIR', '/var/lib/turbopi')
+        self.trigger_file = os.path.join(self.trigger_dir, 'update-trigger.json')
         
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
@@ -166,6 +169,61 @@ class UpdaterService:
             logging.critical("Update aborted")
             return False
 
+    def check_for_update_trigger(self) -> bool:
+        """
+        Check if there's an update trigger file and process it.
+        
+        Returns:
+            True if an update was triggered and processed, False otherwise
+        """
+        if not os.path.exists(self.trigger_file):
+            return False
+        
+        try:
+            # Read trigger file
+            with open(self.trigger_file, 'r') as f:
+                trigger_data = json.load(f)
+            
+            version = trigger_data.get('version')
+            url = trigger_data.get('url')
+            checksum = trigger_data.get('checksum')
+            
+            if not version or not url or not checksum:
+                logging.error(f"Invalid trigger file: missing required fields")
+                # Remove invalid trigger file
+                os.remove(self.trigger_file)
+                return False
+            
+            logging.info(f"Found update trigger for version {version}")
+            
+            # Remove trigger file before processing to prevent reprocessing
+            os.remove(self.trigger_file)
+            
+            # Process the update
+            success = self.apply_update_to_system(
+                version=version,
+                url=url,
+                checksum=checksum,
+                requires_reboot=False  # Will be determined from release metadata
+            )
+            
+            return success
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse trigger file: {e}")
+            # Remove invalid trigger file
+            try:
+                os.remove(self.trigger_file)
+            except OSError:
+                pass
+            return False
+        except OSError as e:
+            logging.error(f"Failed to read trigger file: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error processing trigger: {e}")
+            return False
+    
     def run(self):
         """Main service loop"""
         logging.info(f"TurboPi Updater Service starting...")
@@ -177,11 +235,14 @@ class UpdaterService:
         # Main service loop - runs indefinitely until shutdown
         check_count = 0
         while self.running:
-            # In the skeleton, we just sleep
-            # Full implementation will check for updates, manage installations, etc.
-            time.sleep(60)  # Check every minute
+            # Check for update trigger file
+            if self.check_for_update_trigger():
+                logging.info("Update trigger processed")
+            
+            # Sleep before next check
+            time.sleep(10)  # Check every 10 seconds for triggers
             check_count += 1
-            if check_count % 10 == 0:  # Log every 10 minutes
+            if check_count % 60 == 0:  # Log every 10 minutes (60 * 10 seconds)
                 logging.info(f"Updater service: RUNNING - check #{check_count} completed")
 
         logging.info("Updater service: STOPPED")
