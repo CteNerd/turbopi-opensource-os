@@ -9,6 +9,7 @@ Safety: All intents must pass through the control arbiter before execution.
 """
 
 import re
+import sys
 import logging
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
@@ -191,7 +192,8 @@ def main():
     """Main entry point for standalone testing"""
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout
     )
     
     parser = CommandIntentParser()
