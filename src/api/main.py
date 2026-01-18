@@ -16,6 +16,7 @@ import urllib.request
 import urllib.error
 import subprocess
 import threading
+import re
 from typing import Optional, Dict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
@@ -139,7 +140,6 @@ def fetch_latest_stable_release() -> Optional[Dict]:
                 body = data.get('body', '')
                 # Look for SHA256 checksum patterns in release notes
                 # Common formats: "sha256: abc123..." or "SHA256: abc123..."
-                import re
                 checksum_match = re.search(r'(?:sha256|SHA256):\s*([a-fA-F0-9]{64})', body)
                 if checksum_match:
                     checksum = checksum_match.group(1).lower()

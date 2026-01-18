@@ -40,6 +40,8 @@ class UpdaterService:
         self.download_dir = os.environ.get('DOWNLOAD_DIR', '/opt/turbopi/downloads')
         self.trigger_dir = os.environ.get('TRIGGER_DIR', '/var/lib/turbopi')
         self.trigger_file = os.path.join(self.trigger_dir, 'update-trigger.json')
+        # Configurable polling interval (default: 10 seconds for responsiveness)
+        self.poll_interval = int(os.environ.get('UPDATER_POLL_INTERVAL', '10'))
         
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
@@ -173,15 +175,27 @@ class UpdaterService:
         """
         Check if there's an update trigger file and process it.
         
+        Uses atomic rename to prevent race conditions during processing.
+        
         Returns:
             True if an update was triggered and processed, False otherwise
         """
         if not os.path.exists(self.trigger_file):
             return False
         
+        # Atomically move trigger file to processing location to prevent race conditions
+        processing_file = self.trigger_file + '.processing'
+        
         try:
-            # Read trigger file
-            with open(self.trigger_file, 'r') as f:
+            # Rename trigger file atomically
+            os.rename(self.trigger_file, processing_file)
+        except OSError:
+            # File doesn't exist or already being processed
+            return False
+        
+        try:
+            # Read processing file
+            with open(processing_file, 'r') as f:
                 trigger_data = json.load(f)
             
             version = trigger_data.get('version')
@@ -190,14 +204,9 @@ class UpdaterService:
             
             if not version or not url or not checksum:
                 logging.error(f"Invalid trigger file: missing required fields")
-                # Remove invalid trigger file
-                os.remove(self.trigger_file)
                 return False
             
             logging.info(f"Found update trigger for version {version}")
-            
-            # Remove trigger file before processing to prevent reprocessing
-            os.remove(self.trigger_file)
             
             # Process the update
             success = self.apply_update_to_system(
@@ -211,11 +220,6 @@ class UpdaterService:
             
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse trigger file: {e}")
-            # Remove invalid trigger file
-            try:
-                os.remove(self.trigger_file)
-            except OSError:
-                pass
             return False
         except OSError as e:
             logging.error(f"Failed to read trigger file: {e}")
@@ -223,12 +227,20 @@ class UpdaterService:
         except Exception as e:
             logging.error(f"Unexpected error processing trigger: {e}")
             return False
+        finally:
+            # Always remove processing file
+            try:
+                if os.path.exists(processing_file):
+                    os.remove(processing_file)
+            except OSError:
+                pass
     
     def run(self):
         """Main service loop"""
         logging.info(f"TurboPi Updater Service starting...")
         logging.info(f"Robot Name: {self.robot_name}")
         logging.info(f"Auto Update: {self.auto_update}")
+        logging.info(f"Poll Interval: {self.poll_interval}s")
         logging.info(f"Service running in background mode...")
         logging.info(f"Updater service: READY - waiting for update requests")
 
@@ -240,9 +252,11 @@ class UpdaterService:
                 logging.info("Update trigger processed")
             
             # Sleep before next check
-            time.sleep(10)  # Check every 10 seconds for triggers
+            time.sleep(self.poll_interval)
             check_count += 1
-            if check_count % 60 == 0:  # Log every 10 minutes (60 * 10 seconds)
+            # Log every 10 minutes (adjust based on poll interval)
+            log_interval = max(1, int(600 / self.poll_interval))
+            if check_count % log_interval == 0:
                 logging.info(f"Updater service: RUNNING - check #{check_count} completed")
 
         logging.info("Updater service: STOPPED")
