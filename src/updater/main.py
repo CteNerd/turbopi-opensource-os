@@ -14,6 +14,7 @@ import sys
 import time
 import signal
 import logging
+import json
 
 # Import download and verification functionality
 try:
@@ -37,6 +38,21 @@ class UpdaterService:
         self.robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
         self.auto_update = os.environ.get('AUTO_UPDATE', 'false').lower() == 'true'
         self.download_dir = os.environ.get('DOWNLOAD_DIR', '/opt/turbopi/downloads')
+        self.trigger_dir = os.environ.get('TRIGGER_DIR', '/var/lib/turbopi')
+        self.trigger_file = os.path.join(self.trigger_dir, 'update-trigger.json')
+        
+        # Configurable polling interval with validation
+        poll_interval_raw = os.environ.get('UPDATER_POLL_INTERVAL', '10')
+        try:
+            self.poll_interval = int(poll_interval_raw)
+            if self.poll_interval < 1:
+                raise ValueError("poll interval must be positive")
+        except ValueError:
+            logging.warning(
+                "Invalid UPDATER_POLL_INTERVAL '%s', falling back to default of 10 seconds",
+                poll_interval_raw,
+            )
+            self.poll_interval = 10
         
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
@@ -166,22 +182,103 @@ class UpdaterService:
             logging.critical("Update aborted")
             return False
 
+    def check_for_update_trigger(self) -> bool:
+        """
+        Check if there's an update trigger file and process it.
+        
+        Uses atomic rename to prevent race conditions during processing.
+        
+        Returns:
+            True if an update was triggered and processed, False otherwise
+        """
+        if not os.path.exists(self.trigger_file):
+            return False
+        
+        # Atomically move trigger file to processing location to prevent race conditions
+        processing_file = self.trigger_file + '.processing'
+        
+        try:
+            # Rename trigger file atomically
+            os.rename(self.trigger_file, processing_file)
+        except OSError:
+            # File doesn't exist or already being processed
+            return False
+        
+        try:
+            # Read processing file
+            with open(processing_file, 'r') as f:
+                trigger_data = json.load(f)
+            
+            version = trigger_data.get('version')
+            url = trigger_data.get('url')
+            checksum = trigger_data.get('checksum')
+            
+            # Check for missing fields and log which ones
+            missing_fields = []
+            if not version:
+                missing_fields.append("version")
+            if not url:
+                missing_fields.append("url")
+            if not checksum:
+                missing_fields.append("checksum")
+            if missing_fields:
+                logging.error(
+                    "Invalid trigger file: missing required fields: %s",
+                    ", ".join(missing_fields),
+                )
+                return False
+            
+            logging.info(f"Found update trigger for version {version}")
+            
+            # Process the update
+            success = self.apply_update_to_system(
+                version=version,
+                url=url,
+                checksum=checksum,
+                requires_reboot=False  # Will be determined from release metadata
+            )
+            
+            return success
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse trigger file: {e}")
+            return False
+        except OSError as e:
+            logging.error(f"Failed to read trigger file: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error processing trigger: {e}")
+            return False
+        finally:
+            # Always remove processing file to prevent accumulation
+            try:
+                if os.path.exists(processing_file):
+                    os.remove(processing_file)
+            except OSError as e:
+                logging.debug(f"Failed to remove processing file {processing_file}: {e}")
+    
     def run(self):
         """Main service loop"""
         logging.info(f"TurboPi Updater Service starting...")
         logging.info(f"Robot Name: {self.robot_name}")
         logging.info(f"Auto Update: {self.auto_update}")
+        logging.info(f"Poll Interval: {self.poll_interval}s")
         logging.info(f"Service running in background mode...")
         logging.info(f"Updater service: READY - waiting for update requests")
 
         # Main service loop - runs indefinitely until shutdown
         check_count = 0
         while self.running:
-            # In the skeleton, we just sleep
-            # Full implementation will check for updates, manage installations, etc.
-            time.sleep(60)  # Check every minute
+            # Check for update trigger file
+            if self.check_for_update_trigger():
+                logging.info("Update trigger processed")
+            
+            # Sleep before next check
+            time.sleep(self.poll_interval)
             check_count += 1
-            if check_count % 10 == 0:  # Log every 10 minutes
+            # Log every 10 minutes (adjust based on poll interval)
+            log_interval = max(1, int(600 / self.poll_interval))
+            if check_count % log_interval == 0:
                 logging.info(f"Updater service: RUNNING - check #{check_count} completed")
 
         logging.info("Updater service: STOPPED")
