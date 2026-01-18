@@ -16,8 +16,8 @@ import time
 import logging
 import signal
 
-# Add voice module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'voice'))
+# Import wake word engine from current directory
+sys.path.insert(0, os.path.dirname(__file__))
 
 from wake_word import WakeWordEngine
 
