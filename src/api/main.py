@@ -274,6 +274,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_updates_apply()
         elif self.path == '/voice/wake-word/config':
             self.handle_wake_word_update_config()
+        elif self.path == '/voice/stt':
+            self.handle_stt()
         else:
             self.send_error(404, "Not Found")
 
@@ -536,6 +538,102 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"Wake word config update endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to update wake word configuration")
+    
+    def handle_stt(self):
+        """Handle POST /voice/stt endpoint"""
+        try:
+            # Check if OpenAI API key is configured
+            openai_api_key = os.environ.get('OPENAI_API_KEY')
+            if not openai_api_key:
+                logging.error("STT request failed: OPENAI_API_KEY not configured")
+                self.send_error(500, "STT service not configured: Missing OPENAI_API_KEY")
+                return
+            
+            # Validate Content-Type
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('audio/wav'):
+                self.send_error(400, "Invalid Content-Type: Expected audio/wav")
+                return
+            
+            # Read audio data
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.send_error(400, "No audio data provided")
+                return
+            
+            # Limit audio size to prevent memory issues (10MB max)
+            max_size = 10 * 1024 * 1024  # 10MB
+            if content_length > max_size:
+                self.send_error(413, f"Audio file too large: Maximum size is {max_size} bytes")
+                return
+            
+            audio_data = self.rfile.read(content_length)
+            
+            # Call OpenAI Whisper API
+            try:
+                # Prepare multipart/form-data request
+                boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+                
+                # Build multipart body
+                body_parts = []
+                body_parts.append(f'--{boundary}'.encode())
+                body_parts.append(b'Content-Disposition: form-data; name="file"; filename="audio.wav"')
+                body_parts.append(b'Content-Type: audio/wav')
+                body_parts.append(b'')
+                body_parts.append(audio_data)
+                body_parts.append(f'--{boundary}'.encode())
+                body_parts.append(b'Content-Disposition: form-data; name="model"')
+                body_parts.append(b'')
+                body_parts.append(b'whisper-1')
+                body_parts.append(f'--{boundary}--'.encode())
+                
+                body = b'\r\n'.join(body_parts)
+                
+                # Create request to OpenAI API
+                openai_url = 'https://api.openai.com/v1/audio/transcriptions'
+                req = urllib.request.Request(openai_url, data=body, method='POST')
+                req.add_header('Authorization', f'Bearer {openai_api_key}')
+                req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
+                
+                # Make API call
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    response_data = json.loads(response.read().decode())
+                    transcript = response_data.get('text', '')
+                    
+                    # Return transcript
+                    result = {
+                        'transcript': transcript
+                    }
+                    
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(result).encode())
+                    
+                    logging.info(f"STT completed successfully: {len(audio_data)} bytes -> {len(transcript)} chars")
+                    
+            except urllib.error.HTTPError as e:
+                error_body = e.read().decode() if e.fp else ''
+                logging.error(f"OpenAI API error: {e.code} - {error_body}")
+                
+                if e.code == 401:
+                    self.send_error(500, "STT service authentication failed: Invalid API key")
+                elif e.code == 429:
+                    self.send_error(503, "STT service rate limit exceeded: Please try again later")
+                else:
+                    self.send_error(500, f"STT service error: OpenAI API returned {e.code}")
+                    
+            except urllib.error.URLError as e:
+                logging.error(f"Network error calling OpenAI API: {e.reason}")
+                self.send_error(503, "STT service unavailable: Network error")
+                
+            except json.JSONDecodeError as e:
+                logging.error(f"Failed to parse OpenAI API response: {e}")
+                self.send_error(500, "STT service error: Invalid response from OpenAI API")
+                
+        except Exception as e:
+            logging.error(f"STT endpoint error: {str(e)}")
+            self.send_error(500, "Internal Server Error: Unable to process STT request")
 
 
 def main():
