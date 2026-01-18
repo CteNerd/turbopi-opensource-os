@@ -142,10 +142,11 @@ def test_trigger_file_mechanism():
     try:
         # Override trigger directory to use temp directory
         with patch.dict(os.environ, {'TRIGGER_DIR': temp_dir}):
-            # Create trigger file
+            # Create trigger file with valid SHA256 checksum
             version = '1.0.0'
             url = 'https://example.com/release.tar.gz'
-            checksum = 'abc123'
+            # Use a valid 64-character hex SHA256 checksum
+            checksum = 'a' * 64
             
             trigger_system_update(version, url, checksum)
             
