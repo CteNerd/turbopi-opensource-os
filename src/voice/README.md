@@ -23,6 +23,16 @@ Server-side STT endpoint that:
 - Returns JSON transcript
 - **Server-side API calls only** (no client-side API exposure)
 
+### Command Intent Parser (`command_intent.py`)
+
+Schema-based command parser that:
+- Parses STT transcripts into strict command intents
+- **STOP command always recognized and valid** (highest priority)
+- Rejects unknown commands for safety
+- Supports FOLLOW commands with target extraction
+- **Never directly controls motors** - outputs intents for safety arbiter
+- Provides confidence scores and audit trail
+
 ### API Integration
 
 Voice functionality is integrated into the TurboPi API service with the following endpoints:
@@ -67,15 +77,21 @@ OPENAI_API_KEY=your-key-here  # Required for STT functionality
 
 ## Safety Guarantees
 
-1. **No Motor Control**: Wake word detection has no interface to motor control systems
+1. **No Motor Control**: Wake word detection and command parser have no interface to motor control systems
 2. **Voice Capture Only**: Wake word only arms STT voice capture
-3. **Timeout Protection**: Armed state automatically times out after configured duration
-4. **ASCII Only**: Wake words are validated to be ASCII-only
-5. **Thread Safe**: All operations are thread-safe
+3. **Intent-Based Commands**: Command parser outputs intents only - execution requires safety arbiter approval
+4. **STOP Always Works**: STOP command has highest priority and is always recognized
+5. **Unknown Commands Rejected**: Unrecognized commands are explicitly rejected, not guessed
+6. **Timeout Protection**: Armed state automatically times out after configured duration
+7. **ASCII Only**: Wake words are validated to be ASCII-only
+8. **Thread Safe**: All operations are thread-safe
+9. **Audit Trail**: All parsed commands preserve raw transcript for logging and review
 
 ## Usage
 
 ### Programmatic Usage
+
+#### Wake Word Detection
 
 ```python
 from wake_word import WakeWordEngine
@@ -96,6 +112,34 @@ if detected:
     
     # Disarm after processing
     engine.disarm()
+```
+
+#### Command Intent Parsing
+
+```python
+from command_intent import CommandIntentParser, CommandType
+
+# Create parser
+parser = CommandIntentParser()
+
+# Parse transcript from STT
+transcript = "follow the person"
+intent = parser.parse(transcript)
+
+if intent.is_valid():
+    print(f"Command: {intent.command.value}")
+    print(f"Target: {intent.target}")
+    print(f"Confidence: {intent.confidence}")
+    
+    # Route through safety arbiter (NOT shown - this is external)
+    # arbiter.process_voice_intent(intent)
+else:
+    print(f"Unknown command rejected: {transcript}")
+
+# STOP command always works
+stop_intent = parser.parse("emergency stop")
+assert stop_intent.command == CommandType.STOP
+assert stop_intent.is_valid()
 ```
 
 ### API Usage
@@ -126,7 +170,15 @@ curl -X POST http://localhost:8080/voice/stt \
 
 ```bash
 cd src/voice
+
+# Test wake word engine
 python3 -m unittest test_wake_word.py -v
+
+# Test command intent parser
+python3 -m unittest test_command_intent.py -v
+
+# Run all tests
+python3 -m unittest discover -v
 ```
 
 ### API Integration Tests
@@ -135,6 +187,18 @@ python3 -m unittest test_wake_word.py -v
 cd src/api
 python3 -m unittest test_wake_word_api.py -v
 python3 -m unittest test_stt_api.py -v
+```
+
+### Standalone Testing
+
+```bash
+cd src/voice
+
+# Test wake word engine
+python3 wake_word.py
+
+# Test command intent parser
+python3 command_intent.py
 ```
 
 ## Architecture
@@ -152,8 +216,43 @@ python3 -m unittest test_stt_api.py -v
          │   STT Endpoint     │
          │  (OpenAI Whisper)  │
          │  Server-side only  │
+         └────────┬───────────┘
+                  │
+                  │ Transcript
+                  ▼
+         ┌────────────────────┐
+         │  Command Intent    │
+         │      Parser        │
+         │  (Schema-based)    │
+         └────────┬───────────┘
+                  │
+                  │ Command Intent
+                  │ (NOT motor commands)
+                  ▼
+         ┌────────────────────┐
+         │  Safety Arbiter    │
+         │  (External module) │
          └────────────────────┘
 ```
+
+## Supported Commands
+
+### STOP Command
+- **Priority**: Highest (always checked first)
+- **Variations**: stop, halt, freeze, emergency stop, e-stop
+- **Target**: None
+- **Behavior**: Immediately recognized, confidence = 1.0
+
+### FOLLOW Command
+- **Variations**: follow [target], start following [target]
+- **Target**: Extracted from command (e.g., "person", "dog", "cat")
+- **Special Cases**: "follow me" normalizes to target="person"
+- **Confidence**: ~0.9 for pattern matches
+
+### Unknown Commands
+- **Behavior**: Explicitly rejected with UNKNOWN type
+- **Confidence**: 0.0
+- **Safety**: Prevents unintended actions
 
 ## Future Enhancements
 
