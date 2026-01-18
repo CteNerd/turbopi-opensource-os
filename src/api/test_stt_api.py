@@ -69,8 +69,11 @@ class TestSTTEndpoint(unittest.TestCase):
     
     def test_stt_missing_api_key(self):
         """Test STT request without API key configured"""
-        # Temporarily remove API key
+        # Save original state
+        original_key_exists = 'OPENAI_API_KEY' in os.environ
         original_key = os.environ.get('OPENAI_API_KEY')
+        
+        # Temporarily remove API key
         if 'OPENAI_API_KEY' in os.environ:
             del os.environ['OPENAI_API_KEY']
         
@@ -81,9 +84,11 @@ class TestSTTEndpoint(unittest.TestCase):
             
             self.assertEqual(status_code, 500)
         finally:
-            # Restore API key
-            if original_key:
+            # Restore original state precisely
+            if original_key_exists:
                 os.environ['OPENAI_API_KEY'] = original_key
+            elif 'OPENAI_API_KEY' in os.environ:
+                del os.environ['OPENAI_API_KEY']
     
     def test_stt_wrong_content_type(self):
         """Test STT request with wrong Content-Type"""
@@ -105,6 +110,26 @@ class TestSTTEndpoint(unittest.TestCase):
         # GET should return 404 (not found)
         status_code, _ = self._make_request('/voice/stt', 'GET')
         self.assertEqual(status_code, 404)
+    
+    def test_stt_invalid_content_length(self):
+        """Test STT request with invalid Content-Length header"""
+        # Test with non-numeric Content-Length
+        url = f"{self.base_url}/voice/stt"
+        
+        # Create a custom request with invalid Content-Length
+        import http.client
+        conn = http.client.HTTPConnection('localhost', 18082)
+        try:
+            # Send headers manually
+            conn.putrequest('POST', '/voice/stt')
+            conn.putheader('Content-Type', 'audio/wav')
+            conn.putheader('Content-Length', 'invalid')  # Invalid value
+            conn.endheaders()
+            
+            response = conn.getresponse()
+            self.assertEqual(response.status, 400)
+        finally:
+            conn.close()
 
 
 if __name__ == '__main__':

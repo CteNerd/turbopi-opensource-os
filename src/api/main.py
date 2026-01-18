@@ -555,8 +555,21 @@ class APIHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Invalid Content-Type: Expected audio/wav")
                 return
             
-            # Read audio data
-            content_length = int(self.headers.get('Content-Length', 0))
+            # Read and validate Content-Length header
+            content_length_header = self.headers.get('Content-Length')
+            if content_length_header is None:
+                content_length = 0
+            else:
+                try:
+                    content_length = int(content_length_header)
+                except (TypeError, ValueError):
+                    self.send_error(400, "Invalid Content-Length header: must be an integer")
+                    return
+            
+            if content_length < 0:
+                self.send_error(400, "Invalid Content-Length header: must be non-negative")
+                return
+            
             if content_length == 0:
                 self.send_error(400, "No audio data provided")
                 return
@@ -571,23 +584,33 @@ class APIHandler(BaseHTTPRequestHandler):
             
             # Call OpenAI Whisper API
             try:
-                # Prepare multipart/form-data request
+                # Prepare multipart/form-data request per RFC 2046
                 boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+                boundary_bytes = boundary.encode('ascii')
                 
-                # Build multipart body
-                body_parts = []
-                body_parts.append(f'--{boundary}'.encode())
-                body_parts.append(b'Content-Disposition: form-data; name="file"; filename="audio.wav"')
-                body_parts.append(b'Content-Type: audio/wav')
-                body_parts.append(b'')
-                body_parts.append(audio_data)
-                body_parts.append(f'--{boundary}'.encode())
-                body_parts.append(b'Content-Disposition: form-data; name="model"')
-                body_parts.append(b'')
-                body_parts.append(b'whisper-1')
-                body_parts.append(f'--{boundary}--'.encode())
-                
-                body = b'\r\n'.join(body_parts)
+                # Build multipart body with correct CRLF placement:
+                # --boundary\r\n
+                # Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n
+                # Content-Type: audio/wav\r\n
+                # \r\n
+                # <audio_data>\r\n
+                # --boundary\r\n
+                # Content-Disposition: form-data; name="model"\r\n
+                # \r\n
+                # whisper-1\r\n
+                # --boundary--\r\n
+                body = (
+                    b"--" + boundary_bytes + b"\r\n"
+                    b'Content-Disposition: form-data; name="file"; filename="audio.wav"' + b"\r\n"
+                    b"Content-Type: audio/wav" + b"\r\n"
+                    b"\r\n"
+                    + audio_data + b"\r\n"
+                    + b"--" + boundary_bytes + b"\r\n"
+                    + b'Content-Disposition: form-data; name="model"' + b"\r\n"
+                    + b"\r\n"
+                    + b"whisper-1" + b"\r\n"
+                    + b"--" + boundary_bytes + b"--" + b"\r\n"
+                )
                 
                 # Create request to OpenAI API
                 openai_url = 'https://api.openai.com/v1/audio/transcriptions'
@@ -613,8 +636,8 @@ class APIHandler(BaseHTTPRequestHandler):
                     logging.info(f"STT completed successfully: {len(audio_data)} bytes -> {len(transcript)} chars")
                     
             except urllib.error.HTTPError as e:
-                error_body = e.read().decode() if e.fp else ''
-                logging.error(f"OpenAI API error: {e.code} - {error_body}")
+                # Don't log error body as it may contain sensitive information
+                logging.error(f"OpenAI API error: HTTP {e.code}")
                 
                 if e.code == 401:
                     self.send_error(500, "STT service authentication failed: Invalid API key")
