@@ -2,7 +2,7 @@
 
 ## Overview
 
-The voice module provides wake word detection capabilities for TurboPi. The wake word system enables voice-activated interaction while maintaining safety guarantees.
+The voice module provides wake word detection and speech-to-text (STT) capabilities for TurboPi. The voice system enables voice-activated interaction while maintaining safety guarantees.
 
 ## Components
 
@@ -14,13 +14,26 @@ Low-CPU wake word detection engine that:
 - **Never triggers motor control**
 - Automatically times out if no speech follows
 
+### Speech-to-Text (STT) API
+
+Server-side STT endpoint that:
+- Converts audio input to text using OpenAI Whisper API
+- Requires `OPENAI_API_KEY` in `/etc/turbopi/config.env`
+- Accepts audio/wav format (max 10MB)
+- Returns JSON transcript
+- **Server-side API calls only** (no client-side API exposure)
+
 ### API Integration
 
-Wake word functionality is integrated into the TurboPi API service with the following endpoints:
+Voice functionality is integrated into the TurboPi API service with the following endpoints:
 
+**Wake Word:**
 - `GET /voice/wake-word/status` - Get current wake word detection status
 - `GET /voice/wake-word/config` - Get wake word configuration
 - `POST /voice/wake-word/config` - Update wake word configuration
+
+**Speech-to-Text:**
+- `POST /voice/stt` - Convert audio to text transcript
 
 See `docs/api/OPENAPI.yaml` for full API specification.
 
@@ -40,12 +53,16 @@ sudo systemctl start turbopi-wake-word.service
 
 ## Configuration
 
-Wake word settings are configured via environment variables in `/etc/turbopi/config.env`:
+Voice settings are configured via environment variables in `/etc/turbopi/config.env`:
 
 ```bash
+# Wake Word Settings
 WAKE_WORD=Jarvis              # Wake word to detect
 WAKE_WORD_ENABLED=true        # Enable/disable detection
 WAKE_WORD_TIMEOUT=5           # Timeout in seconds after detection
+
+# STT Settings
+OPENAI_API_KEY=your-key-here  # Required for STT functionality
 ```
 
 ## Safety Guarantees
@@ -96,6 +113,11 @@ curl -X POST http://localhost:8080/voice/wake-word/config \
 curl -X POST http://localhost:8080/voice/wake-word/config \
   -H "Content-Type: application/json" \
   -d '{"enabled": false}'
+
+# Convert audio to text (STT)
+curl -X POST http://localhost:8080/voice/stt \
+  -H "Content-Type: audio/wav" \
+  --data-binary @audio.wav
 ```
 
 ## Testing
@@ -112,6 +134,7 @@ python3 -m unittest test_wake_word.py -v
 ```bash
 cd src/api
 python3 -m unittest test_wake_word_api.py -v
+python3 -m unittest test_stt_api.py -v
 ```
 
 ## Architecture
@@ -125,10 +148,11 @@ python3 -m unittest test_wake_word_api.py -v
                   │ Arms voice capture only
                   │ (NO motor control)
                   ▼
-         ┌────────────────┐
-         │  STT Service   │
-         │  (Future)      │
-         └────────────────┘
+         ┌────────────────────┐
+         │   STT Endpoint     │
+         │  (OpenAI Whisper)  │
+         │  Server-side only  │
+         └────────────────────┘
 ```
 
 ## Future Enhancements
