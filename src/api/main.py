@@ -27,6 +27,9 @@ try:
     WAKE_WORD_AVAILABLE = True
 except ImportError:
     WAKE_WORD_AVAILABLE = False
+    # Note: This warning is logged before logging.basicConfig() in main()
+    # It will use default logging configuration (stderr) but this is acceptable
+    # as it only occurs during module import if wake_word is not available
     logging.warning("Wake word engine not available")
 
 
@@ -510,9 +513,9 @@ class APIHandler(BaseHTTPRequestHandler):
                 self.send_error(400, f"Invalid configuration: {str(ve)}")
                 return
             
-            # Optionally persist to config file
-            # This would require updating /etc/turbopi/config.env
-            # For now, we just update the runtime configuration
+            # TODO: Persist to /etc/turbopi/config.env for permanence across restarts
+            # Currently runtime-only per initial implementation scope
+            # Future enhancement: Update config file and reload on service restart
             
             # Return updated configuration
             config = engine.get_config()

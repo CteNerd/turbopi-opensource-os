@@ -26,7 +26,17 @@ See `docs/api/OPENAPI.yaml` for full API specification.
 
 ### Standalone Service (`main.py`)
 
-Optional standalone wake word service for future use. Currently, wake word detection is integrated into the API service.
+Optional standalone wake word service for dedicated wake word processing. 
+
+**Current Deployment:** Wake word detection is integrated into the API service and automatically available when the API is running. The standalone service (`turbopi-wake-word.service`) is reserved for future use if separate wake word processing is needed (e.g., for audio pipeline integration).
+
+**Installation:** You do **not** need to install or run the standalone service separately. When the TurboPi API service is running, wake word detection is automatically available via the API endpoints described above.
+
+If you need to run the standalone service for advanced use cases, it can be enabled via:
+```bash
+sudo systemctl enable turbopi-wake-word.service
+sudo systemctl start turbopi-wake-word.service
+```
 
 ## Configuration
 

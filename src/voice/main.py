@@ -3,11 +3,10 @@
 TurboPi Wake Word Service
 
 Standalone always-on wake word detection service.
-This service continuously monitors for the wake word and arms voice capture.
 
-Note: For the current implementation, wake word detection is integrated
-into the API service. This standalone service is provided for future use
-if separate wake word processing is needed.
+This service is intended to run as a dedicated background service via systemd
+to provide wake word detection for the TurboPi voice pipeline. It continuously
+monitors for the wake word and arms voice capture.
 """
 
 import os
@@ -52,7 +51,11 @@ class WakeWordService:
             # Check status and log periodically
             if self.engine.is_armed():
                 status = self.engine.get_status()
-                self.logger.debug(f"Voice capture armed, time remaining: {status['time_remaining']:.1f}s")
+                time_remaining = status.get('time_remaining')
+                if time_remaining is not None:
+                    self.logger.debug(f"Voice capture armed, time remaining: {time_remaining:.1f}s")
+                else:
+                    self.logger.debug("Voice capture armed, time remaining: unknown")
             
             time.sleep(1)
     

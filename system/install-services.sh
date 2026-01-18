@@ -38,6 +38,7 @@ echo "Installing service binaries..."
 cp -r "$REPO_ROOT/src/api" /opt/turbopi/current/src/
 cp -r "$REPO_ROOT/src/ui" /opt/turbopi/current/src/
 cp -r "$REPO_ROOT/src/updater" /opt/turbopi/current/src/
+cp -r "$REPO_ROOT/src/voice" /opt/turbopi/current/src/
 
 # Create wrapper scripts in bin directory
 echo "Creating service wrappers..."
@@ -57,9 +58,15 @@ cat > /opt/turbopi/current/bin/updater << 'EOF'
 exec /usr/bin/python3 /opt/turbopi/current/src/updater/main.py
 EOF
 
+cat > /opt/turbopi/current/bin/wake-word << 'EOF'
+#!/bin/bash
+exec /usr/bin/python3 /opt/turbopi/current/src/voice/main.py
+EOF
+
 chmod +x /opt/turbopi/current/bin/api
 chmod +x /opt/turbopi/current/bin/ui
 chmod +x /opt/turbopi/current/bin/updater
+chmod +x /opt/turbopi/current/bin/wake-word
 
 # Create config.env if it doesn't exist
 if [ ! -f /etc/turbopi/config.env ]; then
@@ -91,6 +98,7 @@ echo "Installing systemd services..."
 cp "$REPO_ROOT/system/systemd/turbopi-api.service" /etc/systemd/system/
 cp "$REPO_ROOT/system/systemd/turbopi-ui.service" /etc/systemd/system/
 cp "$REPO_ROOT/system/systemd/turbopi-updater.service" /etc/systemd/system/
+cp "$REPO_ROOT/system/systemd/turbopi-wake-word.service" /etc/systemd/system/
 
 # Reload systemd
 echo "Reloading systemd..."
@@ -101,14 +109,17 @@ echo "Enabling services..."
 systemctl enable turbopi-api.service
 systemctl enable turbopi-ui.service
 systemctl enable turbopi-updater.service
+# Note: Wake word service is optional - enable manually if using standalone mode
+# systemctl enable turbopi-wake-word.service
 
 echo ""
 echo -e "${GREEN}Installation complete!${NC}"
 echo ""
 echo "Services installed:"
-echo "  - turbopi-api.service    (API Backend on port 8080)"
+echo "  - turbopi-api.service    (API Backend on port 8080, includes wake word)"
 echo "  - turbopi-ui.service     (Web UI on port 8081)"
 echo "  - turbopi-updater.service (Update Service)"
+echo "  - turbopi-wake-word.service (Optional standalone wake word service)"
 echo ""
 echo "To start the services now:"
 echo "  sudo systemctl start turbopi-api.service"

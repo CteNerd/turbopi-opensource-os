@@ -58,7 +58,20 @@ class WakeWordEngine:
         """Load configuration from environment variables"""
         wake_word = os.environ.get('WAKE_WORD', 'Jarvis')
         enabled = os.environ.get('WAKE_WORD_ENABLED', 'true').lower() == 'true'
-        timeout = int(os.environ.get('WAKE_WORD_TIMEOUT', '5'))
+        
+        # Parse timeout with error handling
+        default_timeout = 5
+        timeout_str = os.environ.get('WAKE_WORD_TIMEOUT', str(default_timeout))
+        try:
+            timeout = int(timeout_str)
+        except ValueError:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Invalid WAKE_WORD_TIMEOUT value '%s'; falling back to default %d seconds",
+                timeout_str,
+                default_timeout,
+            )
+            timeout = default_timeout
         
         return WakeWordConfig(
             wake_word=wake_word,
@@ -113,10 +126,9 @@ class WakeWordEngine:
         Returns:
             True if wake word detected, False otherwise
         """
-        if not self.config.enabled:
-            return False
-        
         with self._lock:
+            if not self.config.enabled:
+                return False
             # Normalize text for comparison
             search_text = text if self.config.case_sensitive else text.lower()
             target_word = self.config.wake_word if self.config.case_sensitive else self.config.wake_word.lower()
@@ -185,6 +197,14 @@ class WakeWordEngine:
             Dictionary with status information
         """
         with self._lock:
+            # Check timeout and clear armed state if expired (consistent with is_armed)
+            if self._armed and self._armed_timestamp is not None:
+                elapsed = time.time() - self._armed_timestamp
+                if elapsed > self.config.timeout_seconds:
+                    self._armed = False
+                    self._armed_timestamp = None
+                    self._logger.info("Wake word timeout - voice capture disarmed")
+            
             time_remaining = None
             if self._armed and self._armed_timestamp:
                 elapsed = time.time() - self._armed_timestamp
@@ -203,7 +223,8 @@ def main():
     """Main entry point for standalone testing"""
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout
     )
     
     engine = WakeWordEngine()

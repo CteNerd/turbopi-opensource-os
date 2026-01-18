@@ -7,7 +7,6 @@ import os
 import sys
 import json
 import unittest
-from unittest.mock import patch, MagicMock
 from http.server import HTTPServer
 import threading
 import time
