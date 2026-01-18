@@ -14,7 +14,6 @@ import json
 import logging
 import urllib.request
 import urllib.error
-import subprocess
 import threading
 import re
 from typing import Optional, Dict
@@ -127,7 +126,15 @@ def fetch_latest_stable_release() -> Optional[Dict]:
                             with urllib.request.urlopen(checksum_req, timeout=10) as checksum_response:
                                 checksum_content = checksum_response.read().decode().strip()
                                 # Extract checksum (format: "checksum filename" or just "checksum")
-                                checksum = checksum_content.split()[0] if checksum_content else None
+                                if checksum_content:
+                                    candidate_checksum = checksum_content.split()[0]
+                                    # Validate that it's a valid SHA256 checksum (64 hex characters)
+                                    if re.fullmatch(r'[a-fA-F0-9]{64}', candidate_checksum):
+                                        checksum = candidate_checksum.lower()
+                                    else:
+                                        logging.warning(
+                                            "Checksum file content does not contain a valid SHA256 checksum"
+                                        )
                         except Exception as e:
                             logging.warning(f"Failed to fetch checksum file: {e}")
             
@@ -165,10 +172,10 @@ def fetch_latest_stable_release() -> Optional[Dict]:
 
 def trigger_system_update(version: str, url: str, checksum: str) -> None:
     """
-    Trigger a system update asynchronously by calling the updater service.
+    Trigger a system update asynchronously via trigger file IPC.
     
-    This function runs in a separate thread and uses systemd to trigger
-    the update via the turbopi-updater service.
+    This function creates a trigger file that the updater service polls for.
+    The updater service detects the file and initiates the update process.
     
     Args:
         version: Version to install
@@ -179,10 +186,12 @@ def trigger_system_update(version: str, url: str, checksum: str) -> None:
         logging.info(f"Triggering update to version {version}")
         
         # Create a trigger file with update details that the updater service can read
-        trigger_dir = '/var/lib/turbopi'
+        # Use environment variable for consistency with updater service
+        trigger_dir = os.environ.get('TRIGGER_DIR', '/var/lib/turbopi')
         os.makedirs(trigger_dir, exist_ok=True)
         
         trigger_file = os.path.join(trigger_dir, 'update-trigger.json')
+        tmp_trigger_file = trigger_file + '.tmp'
         trigger_data = {
             'version': version,
             'url': url,
@@ -190,15 +199,17 @@ def trigger_system_update(version: str, url: str, checksum: str) -> None:
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
-        with open(trigger_file, 'w') as f:
+        # Write to a temporary file and atomically rename into place so the updater
+        # never observes a partially-written trigger file.
+        with open(tmp_trigger_file, 'w') as f:
             json.dump(trigger_data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        
+        os.replace(tmp_trigger_file, trigger_file)
         
         logging.info(f"Update trigger file created: {trigger_file}")
         logging.info("Update will be processed by turbopi-updater service")
-        
-        # Note: In a full implementation, we would signal the updater service
-        # For now, the updater service would need to poll for this file
-        # or we could use systemd-notify or other IPC mechanisms
         
     except Exception as e:
         logging.error(f"Failed to trigger update: {e}")

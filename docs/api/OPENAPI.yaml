@@ -70,8 +70,32 @@ paths:
     post:
       summary: Apply latest stable update
       responses:
+        '200':
+          description: No update needed (already on latest version)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "no_update_needed" }
+                  message: { type: string, example: "Already running latest version 0.1.0" }
         '202':
           description: Update started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "update_started" }
+                  message: { type: string, example: "Update to version 0.1.5 has been initiated" }
+                  version: { type: string, example: "0.1.5" }
+        '500':
+          description: Failed to fetch release information or verify integrity
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML error page
 
   /network/wifi/status:
     get:

@@ -40,8 +40,19 @@ class UpdaterService:
         self.download_dir = os.environ.get('DOWNLOAD_DIR', '/opt/turbopi/downloads')
         self.trigger_dir = os.environ.get('TRIGGER_DIR', '/var/lib/turbopi')
         self.trigger_file = os.path.join(self.trigger_dir, 'update-trigger.json')
-        # Configurable polling interval (default: 10 seconds for responsiveness)
-        self.poll_interval = int(os.environ.get('UPDATER_POLL_INTERVAL', '10'))
+        
+        # Configurable polling interval with validation
+        poll_interval_raw = os.environ.get('UPDATER_POLL_INTERVAL', '10')
+        try:
+            self.poll_interval = int(poll_interval_raw)
+            if self.poll_interval < 1:
+                raise ValueError("poll interval must be positive")
+        except ValueError:
+            logging.warning(
+                "Invalid UPDATER_POLL_INTERVAL '%s', falling back to default of 10 seconds",
+                poll_interval_raw,
+            )
+            self.poll_interval = 10
         
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
@@ -202,8 +213,19 @@ class UpdaterService:
             url = trigger_data.get('url')
             checksum = trigger_data.get('checksum')
             
-            if not version or not url or not checksum:
-                logging.error(f"Invalid trigger file: missing required fields")
+            # Check for missing fields and log which ones
+            missing_fields = []
+            if not version:
+                missing_fields.append("version")
+            if not url:
+                missing_fields.append("url")
+            if not checksum:
+                missing_fields.append("checksum")
+            if missing_fields:
+                logging.error(
+                    "Invalid trigger file: missing required fields: %s",
+                    ", ".join(missing_fields),
+                )
                 return False
             
             logging.info(f"Found update trigger for version {version}")
@@ -228,12 +250,12 @@ class UpdaterService:
             logging.error(f"Unexpected error processing trigger: {e}")
             return False
         finally:
-            # Always remove processing file
+            # Always remove processing file to prevent accumulation
             try:
                 if os.path.exists(processing_file):
                     os.remove(processing_file)
-            except OSError:
-                pass
+            except OSError as e:
+                logging.debug(f"Failed to remove processing file {processing_file}: {e}")
     
     def run(self):
         """Main service loop"""

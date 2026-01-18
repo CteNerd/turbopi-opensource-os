@@ -217,7 +217,8 @@ class TestFetchLatestStableRelease(unittest.TestCase):
     @patch('urllib.request.urlopen')
     def test_fetch_with_checksum_asset(self, mock_urlopen):
         """Test fetching release with checksum asset file"""
-        checksum_value = 'abc123def456'
+        # SHA256 checksum is 64 hex characters
+        checksum_value = 'abc123def456'.ljust(64, '0')
         mock_release_data = {
             'tag_name': 'v1.0.0',
             'assets': [
@@ -246,7 +247,7 @@ class TestFetchLatestStableRelease(unittest.TestCase):
         
         self.assertIsNotNone(result)
         self.assertEqual(result['version'], '1.0.0')
-        self.assertEqual(result['checksum'], checksum_value)
+        self.assertEqual(result['checksum'], checksum_value.lower())
     
     @patch('urllib.request.urlopen')
     def test_fetch_with_checksum_in_body(self, mock_urlopen):

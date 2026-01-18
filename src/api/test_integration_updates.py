@@ -16,7 +16,6 @@ import tempfile
 import shutil
 import http.client
 import subprocess
-import signal
 from unittest.mock import patch
 
 # Add parent directory to path for imports
@@ -141,20 +140,29 @@ def test_trigger_file_mechanism():
     temp_dir = tempfile.mkdtemp()
     
     try:
-        # Override trigger directory
-        with patch('os.makedirs') as mock_makedirs:
-            mock_makedirs.return_value = None
-            
+        # Override trigger directory to use temp directory
+        with patch.dict(os.environ, {'TRIGGER_DIR': temp_dir}):
             # Create trigger file
             version = '1.0.0'
             url = 'https://example.com/release.tar.gz'
             checksum = 'abc123'
             
-            # This will try to create the file, but we'll verify the logic
-            # In a real environment, this would create /var/lib/turbopi/update-trigger.json
             trigger_system_update(version, url, checksum)
             
-            print("✓ Trigger file creation logic executed successfully")
+            # Verify trigger file was created
+            trigger_file = os.path.join(temp_dir, 'update-trigger.json')
+            assert os.path.exists(trigger_file), "Trigger file should exist"
+            
+            # Verify trigger file content
+            with open(trigger_file, 'r') as f:
+                data = json.load(f)
+            
+            assert data['version'] == version, f"Expected version {version}, got {data['version']}"
+            assert data['url'] == url, f"Expected url {url}, got {data['url']}"
+            assert data['checksum'] == checksum, f"Expected checksum {checksum}, got {data['checksum']}"
+            assert 'timestamp' in data, "Timestamp should be present"
+            
+            print("✓ Trigger file created with correct content")
     
     finally:
         # Clean up
