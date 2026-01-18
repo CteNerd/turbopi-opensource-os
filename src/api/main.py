@@ -20,6 +20,18 @@ from typing import Optional, Dict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 
+# Import wake word engine (add path for imports)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'voice'))
+try:
+    from wake_word import WakeWordEngine
+    WAKE_WORD_AVAILABLE = True
+except ImportError:
+    WAKE_WORD_AVAILABLE = False
+    # Note: This warning is logged before logging.basicConfig() in main()
+    # It will use default logging configuration (stderr) but this is acceptable
+    # as it only occurs during module import if wake_word is not available
+    logging.warning("Wake word engine not available")
+
 
 def get_current_version() -> str:
     """
@@ -217,6 +229,22 @@ def trigger_system_update(version: str, url: str, checksum: str) -> None:
 
 class APIHandler(BaseHTTPRequestHandler):
     """Minimal HTTP handler for the API service"""
+    
+    # Global wake word engine instance (shared across requests)
+    _wake_word_engine: Optional['WakeWordEngine'] = None
+    _wake_word_lock = threading.Lock()
+    
+    @classmethod
+    def get_wake_word_engine(cls):
+        """Get or create wake word engine instance (singleton pattern)"""
+        if not WAKE_WORD_AVAILABLE:
+            return None
+        
+        with cls._wake_word_lock:
+            if cls._wake_word_engine is None:
+                cls._wake_word_engine = WakeWordEngine()
+                logging.info("Wake word engine initialized")
+            return cls._wake_word_engine
 
     def log_message(self, format, *args):
         """Override to log to stdout instead of stderr"""
@@ -233,6 +261,10 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_system_version()
         elif self.path == '/updates/check':
             self.handle_updates_check()
+        elif self.path == '/voice/wake-word/status':
+            self.handle_wake_word_status()
+        elif self.path == '/voice/wake-word/config':
+            self.handle_wake_word_get_config()
         else:
             self.send_error(404, "Not Found")
     
@@ -240,6 +272,8 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle POST requests"""
         if self.path == '/updates/apply':
             self.handle_updates_apply()
+        elif self.path == '/voice/wake-word/config':
+            self.handle_wake_word_update_config()
         else:
             self.send_error(404, "Not Found")
 
@@ -398,6 +432,110 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"Updates apply endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to apply update")
+    
+    def handle_wake_word_status(self):
+        """Handle GET /voice/wake-word/status endpoint"""
+        try:
+            engine = self.get_wake_word_engine()
+            if engine is None:
+                self.send_error(503, "Wake word engine not available")
+                return
+            
+            status = engine.get_status()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(status).encode())
+            
+        except Exception as e:
+            logging.error(f"Wake word status endpoint error: {str(e)}")
+            self.send_error(500, "Internal Server Error: Unable to get wake word status")
+    
+    def handle_wake_word_get_config(self):
+        """Handle GET /voice/wake-word/config endpoint"""
+        try:
+            engine = self.get_wake_word_engine()
+            if engine is None:
+                self.send_error(503, "Wake word engine not available")
+                return
+            
+            config = engine.get_config()
+            config_data = {
+                'wake_word': config.wake_word,
+                'enabled': config.enabled,
+                'timeout_seconds': config.timeout_seconds
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(config_data).encode())
+            
+        except Exception as e:
+            logging.error(f"Wake word config get endpoint error: {str(e)}")
+            self.send_error(500, "Internal Server Error: Unable to get wake word configuration")
+    
+    def handle_wake_word_update_config(self):
+        """Handle POST /voice/wake-word/config endpoint"""
+        try:
+            engine = self.get_wake_word_engine()
+            if engine is None:
+                self.send_error(503, "Wake word engine not available")
+                return
+            
+            # Read request body
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.send_error(400, "Request body is required")
+                return
+            
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON in request body")
+                return
+            
+            # Extract configuration parameters
+            wake_word = data.get('wake_word')
+            enabled = data.get('enabled')
+            
+            # Validate at least one parameter is provided
+            if wake_word is None and enabled is None:
+                self.send_error(400, "At least one of 'wake_word' or 'enabled' must be provided")
+                return
+            
+            # Update configuration
+            try:
+                engine.update_config(wake_word=wake_word, enabled=enabled)
+            except ValueError as ve:
+                self.send_error(400, f"Invalid configuration: {str(ve)}")
+                return
+            
+            # TODO: Persist to /etc/turbopi/config.env for permanence across restarts
+            # Currently runtime-only per initial implementation scope
+            # Future enhancement: Update config file and reload on service restart
+            
+            # Return updated configuration
+            config = engine.get_config()
+            response_data = {
+                'status': 'updated',
+                'wake_word': config.wake_word,
+                'enabled': config.enabled,
+                'timeout_seconds': config.timeout_seconds
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response_data).encode())
+            
+            logging.info(f"Wake word configuration updated: wake_word={config.wake_word}, enabled={config.enabled}")
+            
+        except Exception as e:
+            logging.error(f"Wake word config update endpoint error: {str(e)}")
+            self.send_error(500, "Internal Server Error: Unable to update wake word configuration")
 
 
 def main():

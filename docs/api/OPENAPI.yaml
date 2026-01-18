@@ -241,6 +241,107 @@ paths:
       responses:
         '200': { description: E-Stop engaged }
 
+  /voice/wake-word/status:
+    get:
+      summary: Get wake word detection status
+      description: >
+        Returns the current status of wake word detection including whether
+        voice capture is armed and time remaining before timeout.
+      responses:
+        '200':
+          description: Wake word status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    description: Whether wake word detection is enabled
+                  wake_word:
+                    type: string
+                    description: Current wake word
+                  armed:
+                    type: boolean
+                    description: Whether voice capture is currently armed (wake word detected recently)
+                  timeout_seconds:
+                    type: number
+                    description: Timeout duration in seconds
+                  time_remaining:
+                    type: number
+                    nullable: true
+                    description: Seconds remaining before armed state times out (null if not armed)
+        '503':
+          description: Wake word engine not available
+
+  /voice/wake-word/config:
+    get:
+      summary: Get wake word configuration
+      description: Returns the current wake word configuration settings.
+      responses:
+        '200':
+          description: Wake word configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wake_word:
+                    type: string
+                    description: Current wake word
+                  enabled:
+                    type: boolean
+                    description: Whether wake word detection is enabled
+                  timeout_seconds:
+                    type: number
+                    description: Timeout duration in seconds
+        '503':
+          description: Wake word engine not available
+    post:
+      summary: Update wake word configuration
+      description: >
+        Update wake word settings. At least one parameter must be provided.
+        Wake word must be ASCII-only and not empty.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                wake_word:
+                  type: string
+                  description: New wake word (ASCII only)
+                  minLength: 1
+                  maxLength: 50
+                enabled:
+                  type: boolean
+                  description: Enable/disable wake word detection
+      responses:
+        '200':
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "updated"
+                  wake_word:
+                    type: string
+                    description: Current wake word after update
+                  enabled:
+                    type: boolean
+                    description: Current enabled state after update
+                  timeout_seconds:
+                    type: number
+                    description: Timeout duration in seconds
+        '400':
+          description: Invalid configuration (e.g., non-ASCII wake word, empty string)
+        '503':
+          description: Wake word engine not available
+
   /voice/stt:
     post:
       summary: Speech to text
