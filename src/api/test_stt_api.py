@@ -114,9 +114,6 @@ class TestSTTEndpoint(unittest.TestCase):
     
     def test_stt_invalid_content_length(self):
         """Test STT request with invalid Content-Length header"""
-        # Test with non-numeric Content-Length
-        url = f"{self.base_url}/voice/stt"
-        
         # Create a custom request with invalid Content-Length
         conn = http.client.HTTPConnection('localhost', 18082)
         try:
