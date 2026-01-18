@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import unittest
+import http.client
 from http.server import HTTPServer
 import threading
 import time
@@ -117,7 +118,6 @@ class TestSTTEndpoint(unittest.TestCase):
         url = f"{self.base_url}/voice/stt"
         
         # Create a custom request with invalid Content-Length
-        import http.client
         conn = http.client.HTTPConnection('localhost', 18082)
         try:
             # Send headers manually
