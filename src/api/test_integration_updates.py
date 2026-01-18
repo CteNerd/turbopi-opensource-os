@@ -72,10 +72,11 @@ def test_updates_apply_endpoint():
     temp_dir = tempfile.mkdtemp()
     
     try:
-        # Start API server
+        # Start API server with temp trigger directory
         env = os.environ.copy()
         env['VERSION'] = '0.1.0'
         env['API_PORT'] = '18080'
+        env['TRIGGER_DIR'] = temp_dir  # Use temp dir for trigger file
         
         api_process = subprocess.Popen(
             ['python3', 'main.py'],
@@ -109,10 +110,18 @@ def test_updates_apply_endpoint():
                 print(f"✓ /updates/apply returned status {response.status} (HTML error)")
                 print(f"  Response preview: {body[:200]}...")
             
-            # If we got 202, verify trigger file would be created
-            # (in real scenario, but we can't test actual GitHub API here)
+            # If we got 202, verify trigger file was actually created
             if response.status == 202:
-                print("✓ Update would be triggered (202 Accepted)")
+                print("✓ Update triggered (202 Accepted)")
+                # Give it a moment to write the file
+                time.sleep(0.5)
+                trigger_file = os.path.join(temp_dir, 'update-trigger.json')
+                if os.path.exists(trigger_file):
+                    with open(trigger_file, 'r') as f:
+                        trigger_data = json.load(f)
+                    print(f"✓ Trigger file created with version: {trigger_data.get('version')}")
+                else:
+                    print("✗ Warning: Trigger file was not created")
             elif response.status == 200:
                 print("✓ No update needed (200 OK)")
             else:
