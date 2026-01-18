@@ -29,12 +29,12 @@ def test_updater_processes_trigger():
     temp_dir = tempfile.mkdtemp()
     
     try:
-        # Create trigger file
+        # Create trigger file with valid 64-character SHA256 checksum
         trigger_file = os.path.join(temp_dir, 'update-trigger.json')
         trigger_data = {
             'version': '1.0.0',
             'url': 'https://example.com/release.tar.gz',
-            'checksum': 'abc123def456',
+            'checksum': 'a' * 64,  # Valid 64-character hex SHA256 checksum
             'timestamp': '2024-01-01T00:00:00Z'
         }
         
@@ -61,7 +61,7 @@ def test_updater_processes_trigger():
                 mock_apply.assert_called_once_with(
                     version='1.0.0',
                     url='https://example.com/release.tar.gz',
-                    checksum='abc123def456',
+                    checksum='a' * 64,
                     requires_reboot=False
                 )
                 
