@@ -158,7 +158,7 @@ class CommandIntentParser:
             match = pattern.search(transcript)
             if match:
                 # Extract target from capturing group
-                target = match.group(1) if match.lastindex and match.lastindex >= 1 else None
+                target = match.group(1) if match.lastindex else None
                 
                 # Normalize target
                 if target:
