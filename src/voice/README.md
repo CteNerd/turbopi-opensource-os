@@ -45,6 +45,9 @@ Voice functionality is integrated into the TurboPi API service with the followin
 **Speech-to-Text:**
 - `POST /voice/stt` - Convert audio to text transcript
 
+**Command Parsing:**
+- `POST /voice/command` - Parse voice transcript into command intent for safety arbiter
+
 See `docs/api/OPENAPI.yaml` for full API specification.
 
 ### Standalone Service (`main.py`)
@@ -162,6 +165,11 @@ curl -X POST http://localhost:8080/voice/wake-word/config \
 curl -X POST http://localhost:8080/voice/stt \
   -H "Content-Type: audio/wav" \
   --data-binary @audio.wav
+
+# Parse voice command from transcript
+curl -X POST http://localhost:8080/voice/command \
+  -H "Content-Type: application/json" \
+  -d '{"transcript": "follow the person"}'
 ```
 
 ## Testing
