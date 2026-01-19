@@ -20,7 +20,7 @@ from typing import Optional, Dict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 
-# Import wake word engine (add path for imports)
+# Import wake word engine and command parser (add path for imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'voice'))
 try:
     from wake_word import WakeWordEngine
@@ -31,6 +31,13 @@ except ImportError:
     # It will use default logging configuration (stderr) but this is acceptable
     # as it only occurs during module import if wake_word is not available
     logging.warning("Wake word engine not available")
+
+try:
+    from command_intent import CommandIntentParser
+    COMMAND_PARSER_AVAILABLE = True
+except ImportError:
+    COMMAND_PARSER_AVAILABLE = False
+    logging.warning("Command intent parser not available")
 
 
 def get_current_version() -> str:
@@ -234,6 +241,10 @@ class APIHandler(BaseHTTPRequestHandler):
     _wake_word_engine: Optional['WakeWordEngine'] = None
     _wake_word_lock = threading.Lock()
     
+    # Global command parser instance (shared across requests)
+    _command_parser: Optional['CommandIntentParser'] = None
+    _command_parser_lock = threading.Lock()
+    
     @classmethod
     def get_wake_word_engine(cls):
         """Get or create wake word engine instance (singleton pattern)"""
@@ -245,6 +256,18 @@ class APIHandler(BaseHTTPRequestHandler):
                 cls._wake_word_engine = WakeWordEngine()
                 logging.info("Wake word engine initialized")
             return cls._wake_word_engine
+    
+    @classmethod
+    def get_command_parser(cls):
+        """Get or create command parser instance (singleton pattern)"""
+        if not COMMAND_PARSER_AVAILABLE:
+            return None
+        
+        with cls._command_parser_lock:
+            if cls._command_parser is None:
+                cls._command_parser = CommandIntentParser()
+                logging.info("Command intent parser initialized")
+            return cls._command_parser
 
     def log_message(self, format, *args):
         """Override to log to stdout instead of stderr"""
@@ -252,6 +275,18 @@ class APIHandler(BaseHTTPRequestHandler):
                         (self.address_string(),
                          self.log_date_time_string(),
                          format % args))
+
+    def end_headers(self):
+        """Add CORS headers to all responses"""
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        super().end_headers()
+    
+    def do_OPTIONS(self):
+        """Handle OPTIONS requests for CORS preflight"""
+        self.send_response(200)
+        self.end_headers()
 
     def do_GET(self):
         """Handle GET requests"""
@@ -276,6 +311,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_wake_word_update_config()
         elif self.path == '/voice/stt':
             self.handle_stt()
+        elif self.path == '/voice/command':
+            self.handle_voice_command()
         else:
             self.send_error(404, "Not Found")
 
@@ -657,6 +694,60 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"STT endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to process STT request")
+    
+    def handle_voice_command(self):
+        """
+        Handle POST /voice/command endpoint
+        
+        Parses a voice transcript into a command intent that will be routed
+        through the safety arbiter. This endpoint does NOT execute commands.
+        """
+        try:
+            parser = self.get_command_parser()
+            if parser is None:
+                self.send_error(503, "Command parser not available")
+                return
+            
+            # Read request body
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.send_error(400, "Request body is required")
+                return
+            
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON in request body")
+                return
+            
+            # Extract transcript
+            transcript = data.get('transcript')
+            if not transcript:
+                self.send_error(400, "Missing required field: transcript")
+                return
+            
+            # Parse command intent
+            intent = parser.parse(transcript)
+            
+            # Log the parsed intent for audit trail
+            logging.info(
+                f"Voice command parsed: command={intent.command.value}, "
+                f"target={intent.target}, valid={intent.is_valid()}, "
+                f"confidence={intent.confidence}"
+            )
+            
+            # Return intent (does NOT execute - routing to arbiter is external)
+            result = intent.to_dict()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+            
+        except Exception as e:
+            logging.error(f"Voice command endpoint error: {str(e)}")
+            self.send_error(500, "Internal Server Error: Unable to parse voice command")
 
 
 def main():

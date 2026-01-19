@@ -358,6 +358,53 @@ paths:
                 properties:
                   transcript: { type: string }
 
+  /voice/command:
+    post:
+      summary: Parse voice command from transcript
+      description: >
+        Parses a voice transcript into a command intent that will be routed
+        through the safety arbiter. This endpoint does NOT execute commands
+        directly - it only parses and validates the intent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - transcript
+              properties:
+                transcript:
+                  type: string
+                  description: Voice transcript from STT
+      responses:
+        '200':
+          description: Command parsed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  command:
+                    type: string
+                    enum: [STOP, FOLLOW, UNKNOWN]
+                    description: Command type
+                  target:
+                    type: string
+                    nullable: true
+                    description: Command target (for FOLLOW commands)
+                  confidence:
+                    type: number
+                    description: Confidence score (0.0 to 1.0)
+                  is_valid:
+                    type: boolean
+                    description: Whether command is valid and actionable
+                  raw_transcript:
+                    type: string
+                    description: Original transcript for audit trail
+        '400':
+          description: Invalid request (e.g., missing transcript)
+
   /voice/tts:
     post:
       summary: Text to speech
