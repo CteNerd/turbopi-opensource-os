@@ -12,6 +12,11 @@
 - Voice command intents
 - Autonomy outputs
 
+## Behavior Interface
+- Autonomous behaviors emit `BehaviorCommand` envelopes with `behavior`, `linear_mps`, and `angular_rps`
+- Behaviors implement the `BehaviorProvider` contract and can yield `None` when no motion is requested
+- The arbiter is responsible for all clamping, safety checks, and final HAL writes
+
 ## Output
 - Velocity command to HAL
 
@@ -19,3 +24,5 @@
 - Only one output active per cycle
 - Invalid commands are dropped
 - Safety overrides never bypassed
+- Manual commands override autonomy for the configured manual override window
+- Autonomous commands are accepted only when the robot is armed and manual override is inactive
