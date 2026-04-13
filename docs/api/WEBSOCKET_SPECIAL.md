@@ -3,6 +3,10 @@
 ## Endpoint
 /ws/control
 
+## URL
+- ws://<robot-ip>:8765/ws/control (default)
+- Port is configurable via API_WS_PORT
+
 ## Purpose
 Low-latency manual control channel for teleoperation.
 
@@ -10,6 +14,7 @@ Low-latency manual control channel for teleoperation.
 - Only one active control connection allowed
 - Disconnect triggers immediate STOP
 - Messages are ignored unless robot is ARMED
+- Drive messages are clamped to configured safety limits
 
 ---
 
@@ -32,8 +37,15 @@ Low-latency manual control channel for teleoperation.
   "type": "heartbeat"
 }
 
+### Server Acknowledgement (example)
+{
+  "status": "ok"
+}
+
 ---
 
 ## Safety
 - Missing heartbeat > timeout triggers STOP
 - E-Stop overrides all messages
+- Deadman timeout is configured via DEADMAN_TIMEOUT_MS
+- Speed limits are configured via MAX_LINEAR_SPEED and MAX_ANGULAR_SPEED
