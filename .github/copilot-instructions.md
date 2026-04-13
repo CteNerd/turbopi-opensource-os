@@ -44,8 +44,15 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
 
 ## 6) API + protocol rules
 - Backend endpoints must match docs/api/OPENAPI.yaml.
-- WebSocket messages must match docs/api/WEBSOCKET_SPEC.md.
+- WebSocket messages must match docs/api/WEBSOCKET_SPECIAL.md.
 - If an endpoint/protocol change is required, update the spec and explain in the PR.
+
+### WebSocket control hardening (required)
+- Validate websocket Origin/Host against same-host TurboPi UI policy.
+- Enforce single active control session; connection takeover must STOP previous motion immediately.
+- Validate websocket-related config (for example API_WS_PORT) and fail fast on invalid values.
+- Do not silently degrade teleoperation when websocket dependency is missing; fail startup with clear logs.
+- Keep control endpoint error responses (including 403) reflected in OpenAPI.
 
 ## 7) Testing expectations
 - Add unit tests for non-trivial logic (parsers, safety, updater, state machines).
@@ -56,6 +63,8 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
 - PR title format: "(#ISSUE) <short description>"
 - PR description must include: "Closes #ISSUE" (or Fixes/Resolves) and a checklist of acceptance criteria.
 - If behavior changes, update the relevant docs.
+- For review cycles, every unresolved thread must receive a human-readable reply before resolution (including "no code change needed" cases).
+- If GitHub tooling cannot determine an active PR, identify and operate on the intended PR explicitly by number.
 - Pre-submission consistency checks (think like a senior engineer):
   - If you implement a feature in one service, check if similar services need the same implementation
   - If you add logging to one Python service, ensure all Python services use consistent logging

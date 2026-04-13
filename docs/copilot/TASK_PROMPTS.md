@@ -15,8 +15,16 @@ Respect atomic install, checksum verification, rollback, and reboot rules."
 ---
 
 ## Example Prompt: Teleop
-"Implement WebSocket control per docs/api/WEBSOCKET_SPEC.md.
-Ensure disconnect triggers STOP and respects arbiter priority."
+"Implement WebSocket control per docs/api/WEBSOCKET_SPECIAL.md.
+Require same-host UI origin checks, enforce takeover/disconnect STOP behavior,
+and ensure UI drive limits are sourced from backend control state/config."
+
+---
+
+## Example Prompt: Address PR Feedback
+"Address all unresolved comments on PR #<N>.
+Reply to every thread (including no-change explanations), implement required fixes,
+run targeted tests, then resolve each thread with references to updated files/commits."
 
 ---
 
