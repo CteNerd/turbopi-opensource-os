@@ -18,6 +18,8 @@ class ControlWebSocketBridge:
 
     def connect(self, connection_id: int) -> None:
         """Register a new active control connection, replacing any old one."""
+        if self.active_connection_id is not None and self.active_connection_id != connection_id:
+            self.arbiter.on_disconnect()
         self.active_connection_id = connection_id
         self.arbiter.heartbeat()
 

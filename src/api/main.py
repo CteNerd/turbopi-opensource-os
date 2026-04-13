@@ -26,8 +26,10 @@ from datetime import datetime, timezone
 
 try:
     from websockets.legacy.server import serve as ws_serve
-except Exception:
+    WS_IMPORT_ERROR = None
+except Exception as exc:
     ws_serve = None
+    WS_IMPORT_ERROR = exc
 
 # Add control/HAL imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -54,6 +56,22 @@ except ImportError:
 
 
 SYSTEM_ACTION_DELAY_SECONDS = 0.5
+
+
+def is_valid_control_ws_origin(origin: Optional[str], host_header: Optional[str], ui_port: int) -> bool:
+    """Validate websocket control connections come from same-host UI origin."""
+    if not origin or not host_header:
+        return False
+
+    parsed_origin = urllib.parse.urlparse(origin)
+    if parsed_origin.scheme not in ('http', 'https') or not parsed_origin.hostname:
+        return False
+
+    request_host = host_header.split(':', 1)[0].lower()
+    if parsed_origin.hostname.lower() != request_host:
+        return False
+
+    return parsed_origin.port == ui_port
 
 
 def get_current_version() -> str:
@@ -959,47 +977,62 @@ def main():
     except ValueError as e:
         logging.error(f"Invalid API_PORT configuration: {e}")
         sys.exit(1)
+
+    try:
+        ws_port = int(os.environ.get('API_WS_PORT', '8765'))
+        if not (1 <= ws_port <= 65535):
+            raise ValueError(f"WebSocket port must be between 1 and 65535, got {ws_port}")
+    except ValueError as e:
+        logging.error(f"Invalid API_WS_PORT configuration: {e}")
+        sys.exit(1)
+
+    if ws_serve is None:
+        logging.error('websockets package is required for /ws/control channel: %s', WS_IMPORT_ERROR)
+        sys.exit(1)
     
     robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
-    ws_port = int(os.environ.get('API_WS_PORT', '8765'))
 
     logging.info(f"TurboPi API Backend starting...")
     logging.info(f"Robot Name: {robot_name}")
     logging.info(f"Listening on {host}:{port}")
     logging.info(f"Health endpoint: http://{host}:{port}/health")
 
-    # Start websocket control channel in a background thread when available.
-    if ws_serve is not None:
-        arbiter = APIHandler.get_control_arbiter()
-        bridge = ControlWebSocketBridge(arbiter)
+    # Start websocket control channel in a background thread.
+    arbiter = APIHandler.get_control_arbiter()
+    bridge = ControlWebSocketBridge(arbiter)
+    ui_port = int(os.environ.get('UI_PORT', '8081'))
 
-        def run_websocket_server():
-            async def ws_handler(websocket, path):
-                if path != '/ws/control':
-                    await websocket.close(code=1008, reason='Invalid path')
-                    return
+    def run_websocket_server():
+        async def ws_handler(websocket, path):
+            if path != '/ws/control':
+                await websocket.close(code=1008, reason='Invalid path')
+                return
 
-                connection_id = id(websocket)
-                bridge.connect(connection_id)
-                try:
-                    async for message in websocket:
-                        result = bridge.handle_text(connection_id, message)
-                        await websocket.send(json.dumps(result))
-                finally:
-                    bridge.disconnect(connection_id)
+            origin = websocket.request_headers.get('Origin')
+            host_header = websocket.request_headers.get('Host')
+            if not is_valid_control_ws_origin(origin, host_header, ui_port):
+                await websocket.close(code=1008, reason='Forbidden origin')
+                return
 
-            async def runner():
-                async with ws_serve(ws_handler, host, ws_port):
-                    logging.info(f"Control WebSocket listening on ws://{host}:{ws_port}/ws/control")
-                    while True:
-                        APIHandler.get_control_arbiter().check_safety()
-                        await asyncio.sleep(0.05)
+            connection_id = id(websocket)
+            bridge.connect(connection_id)
+            try:
+                async for message in websocket:
+                    result = bridge.handle_text(connection_id, message)
+                    await websocket.send(json.dumps(result))
+            finally:
+                bridge.disconnect(connection_id)
 
-            asyncio.run(runner())
+        async def runner():
+            async with ws_serve(ws_handler, host, ws_port):
+                logging.info(f"Control WebSocket listening on ws://{host}:{ws_port}/ws/control")
+                while True:
+                    APIHandler.get_control_arbiter().check_safety()
+                    await asyncio.sleep(0.05)
 
-        threading.Thread(target=run_websocket_server, daemon=True).start()
-    else:
-        logging.warning('websockets package unavailable; /ws/control channel not started')
+        asyncio.run(runner())
+
+    threading.Thread(target=run_websocket_server, daemon=True).start()
 
     # Create and start HTTP server
     server = HTTPServer((host, port), APIHandler)

@@ -13,8 +13,10 @@ Low-latency manual control channel for teleoperation.
 ## Connection Rules
 - Only one active control connection allowed
 - Disconnect triggers immediate STOP
+- Connection takeover also triggers immediate STOP for the previous session
 - Messages are ignored unless robot is ARMED
 - Drive messages are clamped to configured safety limits
+- WebSocket handshake must originate from same-host TurboPi UI origin
 
 ---
 

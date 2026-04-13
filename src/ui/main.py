@@ -275,6 +275,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let controlSocket = null;
         let heartbeatTimer = null;
         let dragActive = false;
+        let controlMaxLinear = 0.5;
+        let controlMaxAngular = 1.2;
 
         // Load current wake word configuration on page load
         async function loadWakeWordConfig() {{
@@ -464,8 +466,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const pad = document.getElementById('joystickPad');
             const knob = document.getElementById('joystickKnob');
             const radius = 81;
-            const maxLinear = 0.5;
-            const maxAngular = 1.2;
 
             function updateFromEvent(event) {{
                 const rect = pad.getBoundingClientRect();
@@ -482,8 +482,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 knob.style.left = (81 + dx) + 'px';
                 knob.style.top = (81 + dy) + 'px';
 
-                const linear = (-dy / radius) * maxLinear;
-                const angular = (dx / radius) * maxAngular;
+                const linear = (-dy / radius) * controlMaxLinear;
+                const angular = (dx / radius) * controlMaxAngular;
                 sendDrive(linear, angular);
             }}
 
@@ -516,6 +516,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('armedValue').textContent = data.armed ? 'yes' : 'no';
                 document.getElementById('estopValue').textContent = data.estop_latched ? 'yes' : 'no';
                 document.getElementById('deadmanValue').textContent = data.deadman_triggered ? 'yes' : 'no';
+                if (typeof data.max_linear_speed === 'number') {{
+                    controlMaxLinear = data.max_linear_speed;
+                }}
+                if (typeof data.max_angular_speed === 'number') {{
+                    controlMaxAngular = data.max_angular_speed;
+                }}
             }} catch (error) {{
                 // Keep UI responsive when API is restarting.
             }}

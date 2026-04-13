@@ -44,6 +44,14 @@ class TestControlWebSocketBridge(unittest.TestCase):
         result = self.bridge.disconnect(self.connection_id)
         self.assertEqual(result['status'], 'stopped')
 
+    def test_new_connection_forces_previous_stop(self):
+        self.arbiter.arm()
+        self.bridge.handle_text(self.connection_id, '{"type":"drive","linear":0.1,"angular":0.2}')
+        self.bridge.connect(2)
+        state = self.arbiter.get_state()
+        self.assertEqual(state.linear_mps, 0.0)
+        self.assertTrue(state.deadman_triggered)
+
     def test_invalid_drive_values_are_rejected(self):
         self.arbiter.arm()
         result = self.bridge.handle_text(self.connection_id, '{"type":"drive","linear":"fast","angular":0.2}')

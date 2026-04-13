@@ -284,6 +284,15 @@ paths:
                 properties:
                   status: { type: string, example: "blocked" }
                   message: { type: string }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /control/disarm:
     post:
@@ -298,6 +307,15 @@ paths:
                 type: object
                 properties:
                   status: { type: string, example: "disarmed" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /control/estop:
     post:
@@ -312,6 +330,15 @@ paths:
                 type: object
                 properties:
                   status: { type: string, example: "estop_engaged" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /control/estop/reset:
     post:
@@ -326,6 +353,15 @@ paths:
                 type: object
                 properties:
                   status: { type: string, example: "estop_cleared" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /control/state:
     get:
@@ -344,6 +380,8 @@ paths:
                   deadman_triggered: { type: boolean }
                   linear_mps: { type: number }
                   angular_rps: { type: number }
+                  max_linear_speed: { type: number }
+                  max_angular_speed: { type: number }
 
   /voice/wake-word/status:
     get:

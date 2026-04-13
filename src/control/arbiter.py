@@ -46,6 +46,8 @@ class ControlState:
     deadman_triggered: bool
     linear_mps: float
     angular_rps: float
+    max_linear_speed: float
+    max_angular_speed: float
 
     def to_dict(self) -> Dict[str, object]:
         """Serialize to JSON-friendly dictionary."""
@@ -56,6 +58,8 @@ class ControlState:
             'deadman_triggered': self.deadman_triggered,
             'linear_mps': self.linear_mps,
             'angular_rps': self.angular_rps,
+            'max_linear_speed': self.max_linear_speed,
+            'max_angular_speed': self.max_angular_speed,
         }
 
 
@@ -82,6 +86,8 @@ class ControlArbiter:
             deadman_triggered=self.deadman_triggered,
             linear_mps=self.last_linear,
             angular_rps=self.last_angular,
+            max_linear_speed=self.max_linear_speed,
+            max_angular_speed=self.max_angular_speed,
         )
 
     def arm(self) -> Dict[str, object]:
