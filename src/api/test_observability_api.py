@@ -95,21 +95,35 @@ class TestObservabilityAPI(unittest.TestCase):
             body = response.read()
 
         self.assertEqual(content_type, 'application/gzip')
-        bundle_path = os.path.join('/tmp', f'turbopi-diagnostics-{int(time.time())}.tar.gz')
-        with open(bundle_path, 'wb') as handle:
+        with tempfile.NamedTemporaryFile(suffix='.tar.gz') as handle:
             handle.write(body)
+            handle.flush()
 
-        with tarfile.open(bundle_path, 'r:gz') as archive:
-            names = archive.getnames()
-            self.assertIn('health.json', names)
-            self.assertIn('config.env.redacted', names)
-            self.assertIn('logs/systemd.log.redacted', names)
+            with tarfile.open(handle.name, 'r:gz') as archive:
+                names = archive.getnames()
+                self.assertIn('health.json', names)
+                self.assertIn('config.env.redacted', names)
+                self.assertIn('logs/systemd.log.redacted', names)
 
     def test_diagnostics_bundle_requires_ui_origin(self):
         with self.assertRaises(urllib.error.HTTPError) as context:
             urllib.request.urlopen(f'{self.base}/diagnostics/bundle', timeout=10)
 
         self.assertEqual(context.exception.code, 403)
+
+    @patch('main.build_diagnostics_bundle', side_effect=RuntimeError('boom'))
+    def test_diagnostics_bundle_500_returns_json_payload(self, _mock_bundle):
+        req = urllib.request.Request(f'{self.base}/diagnostics/bundle', method='GET')
+        req.add_header('Origin', 'http://localhost:8081')
+
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(req, timeout=10)
+
+        self.assertEqual(context.exception.code, 500)
+        self.assertEqual(context.exception.headers.get('Content-Type'), 'application/json')
+        payload = json.loads(context.exception.read().decode('utf-8'))
+        self.assertEqual(payload.get('error'), 'internal_server_error')
+        self.assertEqual(payload.get('message'), 'Unable to generate diagnostics bundle')
 
 
 if __name__ == '__main__':

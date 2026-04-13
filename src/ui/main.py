@@ -256,7 +256,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="section">
-            <h2>System Status</h2>
+            <h2>Health Telemetry</h2>
             <div id="diagnostics-alert" class="alert"></div>
             <p>Uptime: <span id="healthUptime" class="current-value">Loading...</span></p>
             <p>CPU Temp: <span id="healthCpuTemp" class="current-value">Loading...</span></p>

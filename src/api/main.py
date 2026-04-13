@@ -196,7 +196,9 @@ def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) 
             updated_lines.append(f'{key}={value}\n')
 
     try:
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        config_dir = os.path.dirname(config_path)
+        if config_dir:
+            os.makedirs(config_dir, exist_ok=True)
         tmp_path = f'{config_path}.tmp'
         with open(tmp_path, 'w', encoding='utf-8') as handle:
             handle.writelines(updated_lines)
@@ -758,7 +760,10 @@ class APIHandler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
         except Exception as exc:
             logging.error('Failed to build diagnostics bundle: %s', exc)
-            self.send_error(500, 'Internal Server Error: Unable to generate diagnostics bundle')
+            self._send_json_response(500, {
+                'error': 'internal_server_error',
+                'message': 'Unable to generate diagnostics bundle',
+            })
 
     def handle_system_version(self):
         """Handle /system/version endpoint"""
@@ -1100,10 +1105,6 @@ class APIHandler(BaseHTTPRequestHandler):
             except ValueError as ve:
                 self.send_error(400, f"Invalid configuration: {str(ve)}")
                 return
-            
-            # TODO: Persist to /etc/turbopi/config.env for permanence across restarts
-            # Currently runtime-only per initial implementation scope
-            # Future enhancement: Update config file and reload on service restart
             
             # Return updated configuration
             config = engine.get_config()

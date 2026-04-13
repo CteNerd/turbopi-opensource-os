@@ -72,6 +72,13 @@ paths:
                   message: { type: string }
         '500':
           description: Failed to generate diagnostics bundle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  message: { type: string }
 
   /system/version:
     get:
