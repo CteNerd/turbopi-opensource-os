@@ -256,6 +256,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="section">
+            <h2>Health Telemetry</h2>
+            <div id="diagnostics-alert" class="alert"></div>
+            <p>Uptime: <span id="healthUptime" class="current-value">Loading...</span></p>
+            <p>CPU Temp: <span id="healthCpuTemp" class="current-value">Loading...</span></p>
+            <p>Memory Used: <span id="healthMemory" class="current-value">Loading...</span></p>
+            <p>Disk Used: <span id="healthDisk" class="current-value">Loading...</span></p>
+            <p>API Service: <span id="healthApiService" class="current-value">Loading...</span></p>
+            <p>UI Service: <span id="healthUiService" class="current-value">Loading...</span></p>
+            <p>Updater Service: <span id="healthUpdaterService" class="current-value">Loading...</span></p>
+            <div style="margin-top:12px;">
+                <button class="button button-secondary" onclick="downloadDiagnosticsBundle()">Download Diagnostics Bundle</button>
+            </div>
+            <p class="info">Diagnostics bundles include redacted logs and configuration to support troubleshooting without SSH access.</p>
+        </div>
+
+        <div class="section">
             <h2>Teleoperation</h2>
             <div id="control-alert" class="alert"></div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
@@ -402,6 +418,74 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             alertDiv.style.display = 'block';
             if (type === 'success') {{
                 setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 2500);
+            }}
+        }}
+
+        function showDiagnosticsAlert(message, type) {{
+            const alertDiv = document.getElementById('diagnostics-alert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert ' + type;
+            alertDiv.style.display = 'block';
+            if (type === 'success') {{
+                setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 3000);
+            }}
+        }}
+
+        function formatUptime(seconds) {{
+            const total = Math.max(0, Math.floor(seconds || 0));
+            const hours = Math.floor(total / 3600);
+            const minutes = Math.floor((total % 3600) / 60);
+            const secs = total % 60;
+            return `${{hours}}h ${{minutes}}m ${{secs}}s`;
+        }}
+
+        async function refreshSystemStatus() {{
+            try {{
+                const response = await fetch(API_BASE + '/health');
+                if (!response.ok) return;
+                const data = await response.json();
+                document.getElementById('healthUptime').textContent = formatUptime(data.uptime);
+                document.getElementById('healthCpuTemp').textContent =
+                    typeof data.cpu_temp === 'number' ? `${{data.cpu_temp.toFixed(1)}} C` : 'n/a';
+
+                const memory = data.memory || {{}};
+                const disk = data.disk || {{}};
+                const services = data.services || {{}};
+
+                document.getElementById('healthMemory').textContent =
+                    (typeof memory.used_mb === 'number' && typeof memory.total_mb === 'number')
+                        ? `${{memory.used_mb.toFixed(0)}} / ${{memory.total_mb.toFixed(0)}} MB`
+                        : 'n/a';
+                document.getElementById('healthDisk').textContent =
+                    (typeof disk.used_mb === 'number' && typeof disk.total_mb === 'number')
+                        ? `${{disk.used_mb.toFixed(0)}} / ${{disk.total_mb.toFixed(0)}} MB`
+                        : 'n/a';
+                document.getElementById('healthApiService').textContent = services.api || 'unknown';
+                document.getElementById('healthUiService').textContent = services.ui || 'unknown';
+                document.getElementById('healthUpdaterService').textContent = services.updater || 'unknown';
+            }} catch (error) {{
+                // status refresh should stay best-effort
+            }}
+        }}
+
+        async function downloadDiagnosticsBundle() {{
+            try {{
+                const response = await fetch(API_BASE + '/diagnostics/bundle');
+                if (!response.ok) {{
+                    throw new Error('Failed to generate diagnostics bundle');
+                }}
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = 'turbopi-diagnostics.tar.gz';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+                showDiagnosticsAlert('Diagnostics bundle downloaded.', 'success');
+            }} catch (error) {{
+                showDiagnosticsAlert('Error downloading diagnostics bundle: ' + error.message, 'error');
             }}
         }}
 
@@ -722,7 +806,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             setupJoystick();
             setupVideoPanel();
             refreshControlState();
+            refreshSystemStatus();
             setInterval(refreshControlState, 500);
+            setInterval(refreshSystemStatus, 5000);
         }});
     </script>
 </body>

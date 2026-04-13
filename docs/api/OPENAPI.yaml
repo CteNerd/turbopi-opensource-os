@@ -22,9 +22,63 @@ paths:
                 properties:
                   status: { type: string }
                   uptime: { type: number }
-                  cpu_temp: { type: number }
+                  cpu_temp: { type: number, nullable: true }
                   version: { type: string }
                   timestamp: { type: string, format: date-time }
+                  memory:
+                    type: object
+                    properties:
+                      total_mb: { type: number }
+                      used_mb: { type: number }
+                      available_mb: { type: number }
+                  disk:
+                    type: object
+                    properties:
+                      total_mb: { type: number }
+                      used_mb: { type: number }
+                      free_mb: { type: number }
+                  services:
+                    type: object
+                    properties:
+                      api: { type: string }
+                      ui: { type: string }
+                      updater: { type: string }
+                      wake_word: { type: string }
+
+  /diagnostics/bundle:
+    get:
+      summary: Download diagnostics bundle
+      description: >
+        Generates a downloadable diagnostics archive with redacted logs and
+        configuration suitable for support without SSH access.
+        Development prototype endpoint for trusted local-network use.
+        This endpoint currently relies on same-host UI origin checks.
+      responses:
+        '200':
+          description: gzipped tar diagnostics bundle
+          content:
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
+        '500':
+          description: Failed to generate diagnostics bundle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  message: { type: string }
 
   /system/version:
     get:

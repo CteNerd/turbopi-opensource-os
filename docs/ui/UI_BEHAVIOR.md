@@ -34,3 +34,9 @@
 - UI displays live MJPEG stream from GET /video/stream
 - FPS is visible in the UI during streaming
 - On stream error (for example API restart), UI automatically reconnects
+
+## System Status Page
+- UI displays expanded health data from GET /health (uptime, temperature, memory, disk, services)
+- UI refreshes system status automatically while page is open
+- "Download Diagnostics Bundle" triggers GET /diagnostics/bundle
+- Diagnostics bundles must contain redacted logs/configuration data
