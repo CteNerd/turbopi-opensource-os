@@ -174,6 +174,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .control-stats p {{
             margin: 6px 0;
         }}
+        .video-panel {{
+            display: grid;
+            gap: 10px;
+        }}
+        .video-frame {{
+            width: 100%;
+            max-width: 640px;
+            border-radius: 8px;
+            border: 1px solid #cfd8dc;
+            background: #000;
+            min-height: 240px;
+            object-fit: contain;
+        }}
     </style>
 </head>
 <body>
@@ -266,17 +279,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
         </div>
+
+        <div class="section">
+            <h2>Vision</h2>
+            <div class="video-panel">
+                <img id="videoStream" class="video-frame" alt="Live camera stream" />
+                <p>Stream: <span id="videoStatus" class="current-value">connecting...</span></p>
+                <p>FPS: <span id="videoFps" class="current-value">0.0</span></p>
+            </div>
+        </div>
     </div>
 
     <script>
         const API_BASE = 'http://' + window.location.hostname + ':{api_port}';
         const WS_BASE = 'ws://' + window.location.hostname + ':{ws_port}';
         const CONTROL_WS_PATH = '/ws/control';
+        const VIDEO_STREAM_PATH = '/video/stream';
+        const VIDEO_STATS_PATH = '/video/stats';
         let controlSocket = null;
         let heartbeatTimer = null;
         let dragActive = false;
         let controlMaxLinear = 0.5;
         let controlMaxAngular = 1.2;
+        let videoReconnectTimer = null;
 
         // Load current wake word configuration on page load
         async function loadWakeWordConfig() {{
@@ -527,6 +552,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
         }}
 
+        function startVideoStream() {{
+            const img = document.getElementById('videoStream');
+            const statusEl = document.getElementById('videoStatus');
+            const streamUrl = API_BASE + VIDEO_STREAM_PATH + '?seconds=20&t=' + Date.now();
+            statusEl.textContent = 'connecting...';
+            img.src = streamUrl;
+        }}
+
+        function setupVideoPanel() {{
+            const img = document.getElementById('videoStream');
+            const statusEl = document.getElementById('videoStatus');
+            const fpsEl = document.getElementById('videoFps');
+
+            img.onerror = () => {{
+                statusEl.textContent = 'reconnecting...';
+                if (videoReconnectTimer) {{
+                    clearTimeout(videoReconnectTimer);
+                }}
+                videoReconnectTimer = setTimeout(startVideoStream, 1000);
+            }};
+
+            setInterval(async () => {{
+                try {{
+                    const response = await fetch(API_BASE + VIDEO_STATS_PATH);
+                    if (!response.ok) return;
+                    const stats = await response.json();
+                    fpsEl.textContent = (stats.fps || 0).toFixed(1);
+                    statusEl.textContent = stats.active ? 'live' : 'idle';
+                }} catch (error) {{
+                    statusEl.textContent = 'reconnecting...';
+                }}
+            }}, 1000);
+
+            startVideoStream();
+        }}
+
         async function parseApiPayload(response) {{
             const contentType = response.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {{
@@ -659,6 +720,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             loadVersionInfo();
             connectControlSocket();
             setupJoystick();
+            setupVideoPanel();
             refreshControlState();
             setInterval(refreshControlState, 500);
         }});
