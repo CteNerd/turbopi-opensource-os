@@ -51,6 +51,8 @@ paths:
       description: >
         Generates a downloadable diagnostics archive with redacted logs and
         configuration suitable for support without SSH access.
+        Development prototype endpoint for trusted local-network use.
+        This endpoint currently relies on same-host UI origin checks.
       responses:
         '200':
           description: gzipped tar diagnostics bundle
@@ -59,6 +61,15 @@ paths:
               schema:
                 type: string
                 format: binary
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
         '500':
           description: Failed to generate diagnostics bundle
 

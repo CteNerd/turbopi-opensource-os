@@ -63,9 +63,13 @@ except ImportError:
 SYSTEM_ACTION_DELAY_SECONDS = 0.5
 MJPEG_BOUNDARY = 'frame'
 DEFAULT_VIDEO_STREAM_SECONDS = 15.0
+SERVICE_STATE_CACHE_TTL_SECONDS = 2.0
 FALLBACK_JPEG_BYTES = base64.b64decode(
     '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAAQABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAVEAEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByA//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AYf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AYf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/Idf/2gAMAwEAAgADAAAAED//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=='
 )
+
+_SERVICE_STATE_CACHE = {'timestamp': 0.0, 'states': {}}
+_SERVICE_STATE_CACHE_LOCK = threading.Lock()
 
 
 def is_valid_control_ws_origin(origin: Optional[str], host_header: Optional[str], ui_port: int) -> bool:
@@ -123,6 +127,77 @@ def _service_state(service_name: str) -> str:
     """Return systemd service state string for diagnostics."""
     value = _safe_run(['systemctl', 'is-active', service_name], timeout=2)
     return value or 'unknown'
+
+
+def _cached_service_states() -> Dict[str, str]:
+    """Cache service state lookups briefly to avoid repeated shelling per /health poll."""
+    now = time.monotonic()
+    with _SERVICE_STATE_CACHE_LOCK:
+        age = now - _SERVICE_STATE_CACHE['timestamp']
+        if age <= SERVICE_STATE_CACHE_TTL_SECONDS and _SERVICE_STATE_CACHE['states']:
+            return dict(_SERVICE_STATE_CACHE['states'])
+
+        states = {
+            'api': _service_state('turbopi-api'),
+            'ui': _service_state('turbopi-ui'),
+            'updater': _service_state('turbopi-updater'),
+            'wake_word': _service_state('turbopi-wake-word'),
+        }
+        _SERVICE_STATE_CACHE['timestamp'] = now
+        _SERVICE_STATE_CACHE['states'] = states
+        return dict(states)
+
+
+def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) -> bool:
+    """Persist wake-word settings to config.env while preserving unrelated keys."""
+    config_path = os.environ.get('CONFIG_ENV_PATH', '/etc/turbopi/config.env')
+    existing_lines = []
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as handle:
+                existing_lines = handle.readlines()
+        except Exception:
+            return False
+
+    replacements = {}
+    if wake_word is not None:
+        replacements['WAKE_WORD'] = wake_word
+    if enabled is not None:
+        replacements['WAKE_WORD_ENABLED'] = 'true' if enabled else 'false'
+
+    if not replacements:
+        return True
+
+    seen = set()
+    updated_lines = []
+    for line in existing_lines:
+        if '=' not in line or line.lstrip().startswith('#'):
+            updated_lines.append(line)
+            continue
+
+        key, _sep, _value = line.partition('=')
+        clean_key = key.strip()
+        if clean_key in replacements:
+            updated_lines.append(f'{clean_key}={replacements[clean_key]}\n')
+            seen.add(clean_key)
+        else:
+            updated_lines.append(line)
+
+    for key, value in replacements.items():
+        if key not in seen:
+            updated_lines.append(f'{key}={value}\n')
+
+    try:
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        tmp_path = f'{config_path}.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as handle:
+            handle.writelines(updated_lines)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, config_path)
+        return True
+    except Exception:
+        return False
 
 
 def _disk_usage(path: str = '/') -> Dict[str, float]:
@@ -186,19 +261,14 @@ def build_health_snapshot() -> Dict[str, object]:
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'memory': _memory_usage(),
         'disk': _disk_usage('/'),
-        'services': {
-            'api': _service_state('turbopi-api'),
-            'ui': _service_state('turbopi-ui'),
-            'updater': _service_state('turbopi-updater'),
-            'wake_word': _service_state('turbopi-wake-word'),
-        },
+        'services': _cached_service_states(),
     }
 
 
 def build_diagnostics_bundle() -> bytes:
     """Create gzipped tar diagnostics bundle with redacted logs/config."""
     health_snapshot = build_health_snapshot()
-    config_path = '/etc/turbopi/config.env'
+    config_path = os.environ.get('DIAGNOSTICS_CONFIG_PATH', '/etc/turbopi/config.env')
     config_raw = ''
     if os.path.exists(config_path):
         try:
@@ -667,6 +737,8 @@ class APIHandler(BaseHTTPRequestHandler):
     def handle_diagnostics_bundle(self):
         """Handle GET /diagnostics/bundle endpoint."""
         try:
+            if not self._require_ui_origin():
+                return
             payload = build_diagnostics_bundle()
             timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
             filename = f'turbopi-diagnostics-{timestamp}.tar.gz'
@@ -1027,11 +1099,16 @@ class APIHandler(BaseHTTPRequestHandler):
             
             # Return updated configuration
             config = engine.get_config()
+            persisted = persist_wake_word_config(config.wake_word, config.enabled)
+            if not persisted:
+                logging.warning('Wake word configuration updated in runtime but failed to persist to config.env')
+
             response_data = {
                 'status': 'updated',
                 'wake_word': config.wake_word,
                 'enabled': config.enabled,
-                'timeout_seconds': config.timeout_seconds
+                'timeout_seconds': config.timeout_seconds,
+                'persisted': persisted,
             }
             
             self.send_response(200)

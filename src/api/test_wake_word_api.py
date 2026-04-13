@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import tempfile
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -26,10 +27,16 @@ class TestWakeWordAPIEndpoints(unittest.TestCase):
     def setUpClass(cls):
         """Start test server"""
         # Set up test environment
+        cls._tmp_dir = tempfile.TemporaryDirectory()
+        cls._config_path = os.path.join(cls._tmp_dir.name, 'config.env')
+        with open(cls._config_path, 'w', encoding='utf-8') as handle:
+            handle.write('ROBOT_NAME=TestBot\n')
+
         os.environ['API_HOST'] = 'localhost'
         os.environ['API_PORT'] = '18080'
         os.environ['WAKE_WORD'] = 'TestWord'
         os.environ['WAKE_WORD_ENABLED'] = 'true'
+        os.environ['CONFIG_ENV_PATH'] = cls._config_path
         
         # Start server in background thread
         cls.server = HTTPServer(('localhost', 18080), APIHandler)
@@ -46,6 +53,7 @@ class TestWakeWordAPIEndpoints(unittest.TestCase):
         """Stop test server"""
         cls.server.shutdown()
         cls.server_thread.join(timeout=5)
+        cls._tmp_dir.cleanup()
     
     def _make_request(self, path, method='GET', data=None):
         """Helper to make HTTP requests"""
@@ -108,6 +116,7 @@ class TestWakeWordAPIEndpoints(unittest.TestCase):
         self.assertEqual(status_code, 200)
         self.assertEqual(data['status'], 'updated')
         self.assertEqual(data['wake_word'], 'NewWord')
+        self.assertTrue(data['persisted'])
         
         # Verify update persisted
         status_code, data = self._make_request('/voice/wake-word/config')
@@ -119,6 +128,22 @@ class TestWakeWordAPIEndpoints(unittest.TestCase):
             method='POST',
             data={'wake_word': 'TestWord'}
         )
+
+    def test_wake_word_update_persists_to_config_file(self):
+        status_code, data = self._make_request(
+            '/voice/wake-word/config',
+            method='POST',
+            data={'wake_word': 'PersistedWord', 'enabled': False}
+        )
+
+        self.assertEqual(status_code, 200)
+        self.assertTrue(data['persisted'])
+
+        with open(self.__class__._config_path, 'r', encoding='utf-8') as handle:
+            content = handle.read()
+
+        self.assertIn('WAKE_WORD=PersistedWord', content)
+        self.assertIn('WAKE_WORD_ENABLED=false', content)
     
     def test_wake_word_update_config_enabled(self):
         """Test POST /voice/wake-word/config to enable/disable"""
