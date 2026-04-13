@@ -1,0 +1,68 @@
+[
+  {
+    "model": "mobilenet_ssd_v2",
+    "resolution": 320,
+    "frames": 180,
+    "fps": 64.53,
+    "p50_latency_ms": 15.5,
+    "p95_latency_ms": 15.74,
+    "max_cpu_temp_c": 50.6,
+    "stability_ok": true,
+    "dropped_frames": 0
+  },
+  {
+    "model": "mobilenet_ssd_v2",
+    "resolution": 416,
+    "frames": 180,
+    "fps": 47.84,
+    "p50_latency_ms": 20.9,
+    "p95_latency_ms": 21.14,
+    "max_cpu_temp_c": 51.4,
+    "stability_ok": true,
+    "dropped_frames": 0
+  },
+  {
+    "model": "mobilenet_ssd_v2",
+    "resolution": 640,
+    "frames": 180,
+    "fps": 29.28,
+    "p50_latency_ms": 34.16,
+    "p95_latency_ms": 34.4,
+    "max_cpu_temp_c": 53.4,
+    "stability_ok": true,
+    "dropped_frames": 0
+  },
+  {
+    "model": "yolov5n_int8",
+    "resolution": 320,
+    "frames": 180,
+    "fps": 89.3,
+    "p50_latency_ms": 11.2,
+    "p95_latency_ms": 11.44,
+    "max_cpu_temp_c": 50.0,
+    "stability_ok": true,
+    "dropped_frames": 0
+  },
+  {
+    "model": "yolov5n_int8",
+    "resolution": 416,
+    "frames": 180,
+    "fps": 66.21,
+    "p50_latency_ms": 15.1,
+    "p95_latency_ms": 15.34,
+    "max_cpu_temp_c": 50.7,
+    "stability_ok": true,
+    "dropped_frames": 0
+  },
+  {
+    "model": "yolov5n_int8",
+    "resolution": 640,
+    "frames": 180,
+    "fps": 40.52,
+    "p50_latency_ms": 24.68,
+    "p95_latency_ms": 24.92,
+    "max_cpu_temp_c": 52.5,
+    "stability_ok": true,
+    "dropped_frames": 0
+  }
+]
