@@ -295,13 +295,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const WS_BASE = 'ws://' + window.location.hostname + ':{ws_port}';
         const CONTROL_WS_PATH = '/ws/control';
         const VIDEO_STREAM_PATH = '/video/stream';
+        const VIDEO_STATS_PATH = '/video/stats';
         let controlSocket = null;
         let heartbeatTimer = null;
         let dragActive = false;
         let controlMaxLinear = 0.5;
         let controlMaxAngular = 1.2;
         let videoReconnectTimer = null;
-        let videoFrames = 0;
 
         // Load current wake word configuration on page load
         async function loadWakeWordConfig() {{
@@ -555,7 +555,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function startVideoStream() {{
             const img = document.getElementById('videoStream');
             const statusEl = document.getElementById('videoStatus');
-            const streamUrl = API_BASE + VIDEO_STREAM_PATH + '?t=' + Date.now();
+            const streamUrl = API_BASE + VIDEO_STREAM_PATH + '?seconds=20&t=' + Date.now();
             statusEl.textContent = 'connecting...';
             img.src = streamUrl;
         }}
@@ -565,11 +565,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const statusEl = document.getElementById('videoStatus');
             const fpsEl = document.getElementById('videoFps');
 
-            img.onload = () => {{
-                videoFrames += 1;
-                statusEl.textContent = 'live';
-            }};
-
             img.onerror = () => {{
                 statusEl.textContent = 'reconnecting...';
                 if (videoReconnectTimer) {{
@@ -578,9 +573,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 videoReconnectTimer = setTimeout(startVideoStream, 1000);
             }};
 
-            setInterval(() => {{
-                fpsEl.textContent = videoFrames.toFixed(1);
-                videoFrames = 0;
+            setInterval(async () => {{
+                try {{
+                    const response = await fetch(API_BASE + VIDEO_STATS_PATH);
+                    if (!response.ok) return;
+                    const stats = await response.json();
+                    fpsEl.textContent = (stats.fps || 0).toFixed(1);
+                    statusEl.textContent = stats.active ? 'live' : 'idle';
+                }} catch (error) {{
+                    statusEl.textContent = 'reconnecting...';
+                }}
             }}, 1000);
 
             startVideoStream();

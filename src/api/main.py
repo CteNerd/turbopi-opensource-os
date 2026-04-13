@@ -59,6 +59,7 @@ except ImportError:
 
 SYSTEM_ACTION_DELAY_SECONDS = 0.5
 MJPEG_BOUNDARY = 'frame'
+DEFAULT_VIDEO_STREAM_SECONDS = 15.0
 FALLBACK_JPEG_BYTES = base64.b64decode(
     '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAAQABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAVEAEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByA//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AYf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AYf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/Idf/2gAMAwEAAgADAAAAED//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=='
 )
@@ -292,6 +293,10 @@ class APIHandler(BaseHTTPRequestHandler):
     # Global camera HAL for video streaming
     _camera_hal: Optional[FakeCameraHAL] = None
     _camera_lock = threading.Lock()
+    _video_stats_lock = threading.Lock()
+    _video_frames_total = 0
+    _video_last_frame_ts = 0.0
+    _video_fps = 0.0
     
     @classmethod
     def get_wake_word_engine(cls):
@@ -337,6 +342,30 @@ class APIHandler(BaseHTTPRequestHandler):
             elif not cls._camera_hal.is_open():
                 cls._camera_hal.open()
             return cls._camera_hal
+
+    @classmethod
+    def record_video_frame(cls) -> None:
+        """Record frame timing metrics for UI diagnostics."""
+        now = time.monotonic()
+        with cls._video_stats_lock:
+            if cls._video_last_frame_ts > 0:
+                delta = now - cls._video_last_frame_ts
+                if delta > 0:
+                    cls._video_fps = 1.0 / delta
+            cls._video_last_frame_ts = now
+            cls._video_frames_total += 1
+
+    @classmethod
+    def get_video_stats(cls) -> Dict[str, object]:
+        """Return current video stream stats for UI FPS display."""
+        now = time.monotonic()
+        with cls._video_stats_lock:
+            active = cls._video_last_frame_ts > 0 and (now - cls._video_last_frame_ts) < 2.0
+            return {
+                'fps': round(cls._video_fps, 1),
+                'frames_total': cls._video_frames_total,
+                'active': active,
+            }
 
     def log_message(self, format, *args):
         """Override to log to stdout instead of stderr"""
@@ -442,6 +471,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_updates_check()
         elif path == '/video/stream':
             self.handle_video_stream(parsed.query)
+        elif path == '/video/stats':
+            self.handle_video_stats()
         elif path == '/voice/wake-word/status':
             self.handle_wake_word_status()
         elif path == '/voice/wake-word/config':
@@ -640,16 +671,23 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle GET /video/stream endpoint with multipart MJPEG output."""
         camera = self.get_camera_hal()
         max_frames = 0
+        max_seconds = DEFAULT_VIDEO_STREAM_SECONDS
         query_params = urllib.parse.parse_qs(query)
         if 'frames' in query_params:
             try:
                 max_frames = max(int(query_params['frames'][0]), 0)
             except (ValueError, TypeError):
                 max_frames = 0
+        if 'seconds' in query_params:
+            try:
+                max_seconds = max(float(query_params['seconds'][0]), 0.1)
+            except (ValueError, TypeError):
+                max_seconds = DEFAULT_VIDEO_STREAM_SECONDS
 
         try:
             calibration = camera.calibration
             frame_interval_s = 1.0 / max(calibration.fps, 1)
+            stream_started_at = time.monotonic()
 
             self.send_response(200)
             self.send_header('Content-Type', f'multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}')
@@ -660,14 +698,18 @@ class APIHandler(BaseHTTPRequestHandler):
             sent_frames = 0
             while True:
                 try:
-                    camera.get_frame()
+                    frame = camera.get_frame()
                 except CameraError:
                     # Re-open once if the camera was closed by a service restart race.
                     camera.open()
-                    camera.get_frame()
+                    frame = camera.get_frame()
 
-                # The fake HAL currently returns RGB bytes; emit a deterministic JPEG frame for MJPEG clients.
-                jpeg_data = FALLBACK_JPEG_BYTES
+                # Use native JPEG payload when available; otherwise emit deterministic fallback JPEG.
+                frame_data = frame.data
+                if frame_data.startswith(b'\xff\xd8') and frame_data.endswith(b'\xff\xd9'):
+                    jpeg_data = frame_data
+                else:
+                    jpeg_data = FALLBACK_JPEG_BYTES
                 payload = (
                     f'--{MJPEG_BOUNDARY}\r\n'
                     'Content-Type: image/jpeg\r\n'
@@ -676,14 +718,21 @@ class APIHandler(BaseHTTPRequestHandler):
 
                 self.wfile.write(payload)
                 self.wfile.flush()
+                self.record_video_frame()
                 sent_frames += 1
                 if max_frames and sent_frames >= max_frames:
+                    break
+                if (time.monotonic() - stream_started_at) >= max_seconds:
                     break
                 time.sleep(frame_interval_s)
         except (BrokenPipeError, ConnectionResetError):
             logging.info('Video stream client disconnected')
         except Exception as exc:
             logging.error('Video stream error: %s', exc)
+
+    def handle_video_stats(self):
+        """Handle GET /video/stats endpoint."""
+        self._send_json_response(200, self.get_video_stats())
     
     def handle_updates_apply(self):
         """Handle /updates/apply endpoint"""

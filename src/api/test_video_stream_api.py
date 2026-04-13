@@ -41,6 +41,15 @@ class TestVideoStreamAPI(unittest.TestCase):
         self.assertIn(b'--frame', body)
         self.assertIn(b'Content-Type: image/jpeg', body)
 
+    def test_video_stats_endpoint(self):
+        urllib.request.urlopen(f'{self.base}/video/stream?frames=1', timeout=5).read()
+        with urllib.request.urlopen(f'{self.base}/video/stats', timeout=5) as response:
+            payload = response.read().decode('utf-8')
+
+        self.assertIn('"fps"', payload)
+        self.assertIn('"frames_total"', payload)
+        self.assertIn('"active"', payload)
+
 
 if __name__ == '__main__':
     unittest.main()

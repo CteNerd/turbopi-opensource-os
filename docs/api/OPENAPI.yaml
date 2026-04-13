@@ -389,6 +389,21 @@ paths:
       description: >
         Provides a multipart MJPEG stream intended for teleoperation and
         debugging UI panels.
+      parameters:
+        - in: query
+          name: frames
+          schema:
+            type: integer
+            minimum: 1
+          required: false
+          description: Optional frame cap useful for tests and diagnostics.
+        - in: query
+          name: seconds
+          schema:
+            type: number
+            minimum: 0.1
+          required: false
+          description: Optional max stream duration for this request.
       responses:
         '200':
           description: MJPEG stream
@@ -399,6 +414,21 @@ paths:
                 description: Multipart stream with image/jpeg frames
         '500':
           description: Stream initialization failure
+
+  /video/stats:
+    get:
+      summary: Current video streaming stats
+      responses:
+        '200':
+          description: Video stream FPS and activity status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fps: { type: number }
+                  frames_total: { type: integer }
+                  active: { type: boolean }
 
   /voice/wake-word/status:
     get:
