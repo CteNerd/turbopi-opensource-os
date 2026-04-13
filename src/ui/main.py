@@ -125,6 +125,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             color: #2196F3;
             font-weight: bold;
         }}
+        .button-secondary {{
+            background-color: #2196F3;
+        }}
+        .button-secondary:hover {{
+            background-color: #1976D2;
+        }}
+        .button-warning {{
+            background-color: #FF9800;
+        }}
+        .button-warning:hover {{
+            background-color: #F57C00;
+        }}
+        .button-danger {{
+            background-color: #F44336;
+        }}
+        .button-danger:hover {{
+            background-color: #D32F2F;
+        }}
+        .version-info p {{
+            margin: 5px 0;
+        }}
     </style>
 </head>
 <body>
@@ -159,11 +180,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             
             <button class="button" onclick="saveWakeWordConfig()">Save Settings</button>
         </div>
+
+        <div class="section">
+            <h2>Software Updates</h2>
+            <div id="update-alert" class="alert"></div>
+
+            <div class="version-info">
+                <p>Current version: <span id="currentVersion" class="current-value">Loading...</span></p>
+                <p>Latest stable: <span id="latestVersion" class="current-value">Loading...</span></p>
+            </div>
+
+            <div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="button button-secondary" id="checkUpdatesBtn" onclick="checkForUpdates()">Check for Updates</button>
+                <button class="button" id="updateNowBtn" onclick="applyUpdate()" disabled>Update Now</button>
+            </div>
+
+            <hr style="margin:20px 0; border:none; border-top:1px solid #e0e0e0;">
+
+            <h3 style="color:#444; margin-bottom:10px;">System Control</h3>
+            <div id="system-alert" class="alert"></div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+                <button class="button button-warning" onclick="restartServices()">Restart Services</button>
+                <button class="button button-danger" onclick="rebootBot()">Reboot Bot</button>
+            </div>
+            <div class="info" style="background:#fff8e1; padding:12px; border-radius:4px; border-left:4px solid #ffc107;">
+                <strong>Restart Services</strong> stops and restarts all TurboPi software services (API, UI, updater,
+                voice) without rebooting the Raspberry Pi. Use this after a software update or when a service is
+                unresponsive. Takes about 5–10 seconds; the page will briefly become unavailable.<br><br>
+                <strong>Reboot Bot</strong> performs a full Linux reboot of the Raspberry Pi. All services stop,
+                the OS shuts down cleanly, and the robot restarts from scratch. Use this for hardware-level
+                troubleshooting or after OS-level changes. Takes about 30–60 seconds before the robot is
+                accessible again.
+            </div>
+        </div>
     </div>
 
     <script>
         const API_BASE = 'http://' + window.location.hostname + ':{api_port}';
-        
+
         // Load current wake word configuration on page load
         async function loadWakeWordConfig() {{
             try {{
@@ -238,9 +292,119 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 }}, 3000);
             }}
         }}
+
+        function showUpdateAlert(message, type) {{
+            const alertDiv = document.getElementById('update-alert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert ' + type;
+            alertDiv.style.display = 'block';
+        }}
+
+        function showSystemAlert(message, type) {{
+            const alertDiv = document.getElementById('system-alert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert ' + type;
+            alertDiv.style.display = 'block';
+            if (type === 'success') {{
+                setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 4000);
+            }}
+        }}
+
+        async function loadVersionInfo() {{
+            try {{
+                const response = await fetch(API_BASE + '/system/version');
+                if (!response.ok) throw new Error('Failed to load version info');
+                const data = await response.json();
+                document.getElementById('currentVersion').textContent = data.current || 'unknown';
+                document.getElementById('latestVersion').textContent = data.latest_stable || 'unknown';
+            }} catch (error) {{
+                document.getElementById('currentVersion').textContent = 'unavailable';
+                document.getElementById('latestVersion').textContent = 'unavailable';
+            }}
+        }}
+
+        async function checkForUpdates() {{
+            const btn = document.getElementById('checkUpdatesBtn');
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+            showUpdateAlert('', '');
+            document.getElementById('update-alert').style.display = 'none';
+            try {{
+                const response = await fetch(API_BASE + '/updates/check');
+                if (!response.ok) throw new Error('Check failed: ' + response.status);
+                const data = await response.json();
+                await loadVersionInfo();
+                if (data.update_available) {{
+                    showUpdateAlert(
+                        'Update available: ' + (data.latest_version || 'new version') +
+                        '. Click "Update Now" to install.',
+                        'success'
+                    );
+                    document.getElementById('updateNowBtn').disabled = false;
+                }} else {{
+                    showUpdateAlert('You are running the latest stable version.', 'success');
+                    document.getElementById('updateNowBtn').disabled = true;
+                }}
+            }} catch (error) {{
+                showUpdateAlert('Error checking for updates: ' + error.message, 'error');
+            }} finally {{
+                btn.disabled = false;
+                btn.textContent = 'Check for Updates';
+            }}
+        }}
+
+        async function applyUpdate() {{
+            if (!confirm('Apply the update now? The robot services will restart automatically. Confirm?')) return;
+            const btn = document.getElementById('updateNowBtn');
+            btn.disabled = true;
+            showUpdateAlert('Update started. Services will restart shortly — this page may be temporarily unavailable.', 'success');
+            try {{
+                const response = await fetch(API_BASE + '/updates/apply', {{ method: 'POST' }});
+                const data = await response.json();
+                if (response.status === 200) {{
+                    showUpdateAlert(data.message || 'Already on latest version.', 'success');
+                }} else if (response.status === 202) {{
+                    showUpdateAlert(
+                        (data.message || 'Update initiated.') +
+                        ' Reload this page in 30–60 seconds.',
+                        'success'
+                    );
+                }} else {{
+                    throw new Error(data.message || 'Update failed');
+                }}
+            }} catch (error) {{
+                showUpdateAlert('Error applying update: ' + error.message, 'error');
+                btn.disabled = false;
+            }}
+        }}
+
+        async function restartServices() {{
+            if (!confirm('Restart all TurboPi services? The page will be briefly unavailable.')) return;
+            showSystemAlert('Restarting services…', 'success');
+            try {{
+                await fetch(API_BASE + '/system/restart', {{ method: 'POST' }});
+            }} catch (_) {{
+                // Expected — connection will drop during restart
+            }}
+            showSystemAlert('Services are restarting. Reload this page in 10–15 seconds.', 'success');
+        }}
+
+        async function rebootBot() {{
+            if (!confirm('Reboot the robot? It will be offline for about 30–60 seconds.')) return;
+            showSystemAlert('Rebooting…', 'success');
+            try {{
+                await fetch(API_BASE + '/system/reboot', {{ method: 'POST' }});
+            }} catch (_) {{
+                // Expected — connection will drop during reboot
+            }}
+            showSystemAlert('Robot is rebooting. Reload this page in 30–60 seconds.', 'success');
+        }}
         
         // Load configuration when page loads
-        window.addEventListener('DOMContentLoaded', loadWakeWordConfig);
+        window.addEventListener('DOMContentLoaded', () => {{
+            loadWakeWordConfig();
+            loadVersionInfo();
+        }});
     </script>
 </body>
 </html>"""

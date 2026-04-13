@@ -307,6 +307,10 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle POST requests"""
         if self.path == '/updates/apply':
             self.handle_updates_apply()
+        elif self.path == '/system/restart':
+            self.handle_system_restart()
+        elif self.path == '/system/reboot':
+            self.handle_system_reboot()
         elif self.path == '/voice/wake-word/config':
             self.handle_wake_word_update_config()
         elif self.path == '/voice/stt':
@@ -375,6 +379,52 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"System version endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to retrieve version information")
+
+    def handle_system_restart(self):
+        """Handle POST /system/restart — restart all TurboPi systemd services."""
+        self.send_response(202)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'status': 'restart_initiated'}).encode())
+        logging.info("Service restart requested via API")
+
+        def _do_restart():
+            import subprocess
+            import time
+            time.sleep(0.5)
+            try:
+                subprocess.run(
+                    ['systemctl', 'restart',
+                     'turbopi-api', 'turbopi-ui', 'turbopi-updater',
+                     'turbopi-wake-word'],
+                    check=False,
+                    timeout=30
+                )
+            except Exception as exc:
+                logging.error("Service restart error: %s", exc)
+
+        t = threading.Thread(target=_do_restart, daemon=True)
+        t.start()
+
+    def handle_system_reboot(self):
+        """Handle POST /system/reboot — reboot the Raspberry Pi."""
+        self.send_response(202)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'status': 'reboot_initiated'}).encode())
+        logging.info("System reboot requested via API")
+
+        def _do_reboot():
+            import subprocess
+            import time
+            time.sleep(0.5)
+            try:
+                subprocess.run(['reboot'], check=False, timeout=10)
+            except Exception as exc:
+                logging.error("Reboot error: %s", exc)
+
+        t = threading.Thread(target=_do_reboot, daemon=True)
+        t.start()
 
     def handle_updates_check(self):
         """Handle /updates/check endpoint"""
