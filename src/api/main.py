@@ -21,6 +21,9 @@ import threading
 import re
 import asyncio
 import base64
+import io
+import tarfile
+import tempfile
 from typing import Optional, Dict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
@@ -89,6 +92,145 @@ def get_current_version() -> str:
         Current version string from VERSION env var, defaults to '0.1.0-dev'
     """
     return os.environ.get('VERSION', '0.1.0-dev')
+
+
+def redact_secrets(text: str) -> str:
+    """Redact common secret patterns from logs/config text."""
+    patterns = [
+        (r'(OPENAI_API_KEY\s*=\s*)([^\s\n]+)', r'\1***REDACTED***'),
+        (r'(password\s*[=:]\s*)([^\s\n]+)', r'\1***REDACTED***'),
+        (r'(wpa_passphrase\s*=\s*)([^\s\n]+)', r'\1***REDACTED***'),
+        (r'(Authorization:\s*Bearer\s+)([^\s\n]+)', r'\1***REDACTED***'),
+        (r'(api[_-]?key\s*[=:]\s*)([^\s\n]+)', r'\1***REDACTED***'),
+        (r'("(?:password|token|api_key)"\s*:\s*")([^"]+)(")', r'\1***REDACTED***\3'),
+    ]
+    redacted = text
+    for pattern, replacement in patterns:
+        redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
+    return redacted
+
+
+def _safe_run(command, timeout: int = 3) -> str:
+    """Run system commands safely and return output text."""
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        return (result.stdout or '').strip()
+    except Exception:
+        return ''
+
+
+def _service_state(service_name: str) -> str:
+    """Return systemd service state string for diagnostics."""
+    value = _safe_run(['systemctl', 'is-active', service_name], timeout=2)
+    return value or 'unknown'
+
+
+def _disk_usage(path: str = '/') -> Dict[str, float]:
+    """Return disk usage stats in MB for the provided mount path."""
+    try:
+        stat = os.statvfs(path)
+        total = (stat.f_blocks * stat.f_frsize) / (1024 * 1024)
+        free = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
+        used = total - free
+        return {
+            'total_mb': round(total, 1),
+            'used_mb': round(used, 1),
+            'free_mb': round(free, 1),
+        }
+    except Exception:
+        return {'total_mb': 0.0, 'used_mb': 0.0, 'free_mb': 0.0}
+
+
+def _memory_usage() -> Dict[str, float]:
+    """Return memory stats in MB parsed from /proc/meminfo when available."""
+    try:
+        with open('/proc/meminfo', 'r', encoding='utf-8') as handle:
+            content = handle.read()
+        total_match = re.search(r'^MemTotal:\s+(\d+)\s+kB$', content, flags=re.MULTILINE)
+        avail_match = re.search(r'^MemAvailable:\s+(\d+)\s+kB$', content, flags=re.MULTILINE)
+        if not total_match or not avail_match:
+            return {'total_mb': 0.0, 'used_mb': 0.0, 'available_mb': 0.0}
+        total = int(total_match.group(1)) / 1024.0
+        available = int(avail_match.group(1)) / 1024.0
+        used = total - available
+        return {
+            'total_mb': round(total, 1),
+            'used_mb': round(used, 1),
+            'available_mb': round(available, 1),
+        }
+    except Exception:
+        return {'total_mb': 0.0, 'used_mb': 0.0, 'available_mb': 0.0}
+
+
+def build_health_snapshot() -> Dict[str, object]:
+    """Build expanded health payload for API and diagnostics bundle."""
+    uptime_seconds = 0.0
+    try:
+        with open('/proc/uptime', 'r', encoding='utf-8') as handle:
+            uptime_seconds = float(handle.readline().split()[0])
+    except Exception:
+        uptime_seconds = 0.0
+
+    cpu_temp = None
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp', 'r', encoding='utf-8') as handle:
+            cpu_temp = float(handle.read().strip()) / 1000.0
+    except Exception:
+        cpu_temp = None
+
+    return {
+        'status': 'ok',
+        'uptime': uptime_seconds,
+        'cpu_temp': cpu_temp,
+        'version': get_current_version(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'memory': _memory_usage(),
+        'disk': _disk_usage('/'),
+        'services': {
+            'api': _service_state('turbopi-api'),
+            'ui': _service_state('turbopi-ui'),
+            'updater': _service_state('turbopi-updater'),
+            'wake_word': _service_state('turbopi-wake-word'),
+        },
+    }
+
+
+def build_diagnostics_bundle() -> bytes:
+    """Create gzipped tar diagnostics bundle with redacted logs/config."""
+    health_snapshot = build_health_snapshot()
+    config_path = '/etc/turbopi/config.env'
+    config_raw = ''
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as handle:
+                config_raw = handle.read()
+        except Exception:
+            config_raw = ''
+
+    journal_output = _safe_run(
+        ['journalctl', '--no-pager', '-n', '300', '-u', 'turbopi-api', '-u', 'turbopi-ui', '-u', 'turbopi-updater'],
+        timeout=5,
+    )
+
+    files = {
+        'health.json': json.dumps(health_snapshot, indent=2),
+        'config.env.redacted': redact_secrets(config_raw),
+        'logs/systemd.log.redacted': redact_secrets(journal_output),
+        'meta.txt': 'TurboPi diagnostics bundle\nContains redacted support data.\n',
+    }
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for name, content in files.items():
+            abs_path = os.path.join(tmp_dir, name)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, 'w', encoding='utf-8') as handle:
+                handle.write(content)
+
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode='w:gz') as tar_handle:
+            for name in files:
+                tar_handle.add(os.path.join(tmp_dir, name), arcname=name)
+        return buffer.getvalue()
 
 
 def normalize_version(version: str) -> tuple:
@@ -473,6 +615,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_video_stream(parsed.query)
         elif path == '/video/stats':
             self.handle_video_stats()
+        elif path == '/diagnostics/bundle':
+            self.handle_diagnostics_bundle()
         elif path == '/voice/wake-word/status':
             self.handle_wake_word_status()
         elif path == '/voice/wake-word/config':
@@ -508,29 +652,7 @@ class APIHandler(BaseHTTPRequestHandler):
     def handle_health(self):
         """Handle /health endpoint"""
         try:
-            # Get system uptime
-            with open('/proc/uptime', 'r') as f:
-                uptime = float(f.readline().split()[0])
-
-            # Get CPU temperature (if available)
-            cpu_temp = None
-            try:
-                with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
-                    cpu_temp = float(f.read().strip()) / 1000.0
-            except (FileNotFoundError, ValueError):
-                # CPU temperature not available on this system
-                pass
-
-            # Get version from environment or default
-            version = get_current_version()
-
-            health_data = {
-                'status': 'ok',
-                'uptime': uptime,
-                'cpu_temp': cpu_temp,
-                'version': version,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }
+            health_data = build_health_snapshot()
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -541,6 +663,22 @@ class APIHandler(BaseHTTPRequestHandler):
             logging.error(f"Health endpoint error: {str(e)}")
             # Return generic error message to client
             self.send_error(500, "Internal Server Error: Unable to retrieve health status")
+
+    def handle_diagnostics_bundle(self):
+        """Handle GET /diagnostics/bundle endpoint."""
+        try:
+            payload = build_diagnostics_bundle()
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+            filename = f'turbopi-diagnostics-{timestamp}.tar.gz'
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/gzip')
+            self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(payload)
+        except Exception as exc:
+            logging.error('Failed to build diagnostics bundle: %s', exc)
+            self.send_error(500, 'Internal Server Error: Unable to generate diagnostics bundle')
 
     def handle_system_version(self):
         """Handle /system/version endpoint"""

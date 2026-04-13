@@ -25,6 +25,42 @@ paths:
                   cpu_temp: { type: number }
                   version: { type: string }
                   timestamp: { type: string, format: date-time }
+                  memory:
+                    type: object
+                    properties:
+                      total_mb: { type: number }
+                      used_mb: { type: number }
+                      available_mb: { type: number }
+                  disk:
+                    type: object
+                    properties:
+                      total_mb: { type: number }
+                      used_mb: { type: number }
+                      free_mb: { type: number }
+                  services:
+                    type: object
+                    properties:
+                      api: { type: string }
+                      ui: { type: string }
+                      updater: { type: string }
+                      wake_word: { type: string }
+
+  /diagnostics/bundle:
+    get:
+      summary: Download diagnostics bundle
+      description: >
+        Generates a downloadable diagnostics archive with redacted logs and
+        configuration suitable for support without SSH access.
+      responses:
+        '200':
+          description: gzipped tar diagnostics bundle
+          content:
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Failed to generate diagnostics bundle
 
   /system/version:
     get:
