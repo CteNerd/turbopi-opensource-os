@@ -50,7 +50,7 @@ All services implement consistent logging with:
 - Full API implementation per OpenAPI spec
 - Complete UI with teleoperation controls
 - Full updater with release promotion
-- Hardware abstraction layer integration
+- Hardware abstraction layer integration (initial HAL primitives now in `src/hal/`)
 - Safety system integration
 
 ## Installation
