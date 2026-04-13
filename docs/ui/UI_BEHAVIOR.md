@@ -29,3 +29,8 @@
 - Joystick release sends stop command
 - WebSocket disconnect or heartbeat timeout must stop motion immediately
 - UI polls control state to display Armed, E-Stop latched, and deadman status
+
+## Vision Page
+- UI displays live MJPEG stream from GET /video/stream
+- FPS is visible in the UI during streaming
+- On stream error (for example API restart), UI automatically reconnects

@@ -383,6 +383,23 @@ paths:
                   max_linear_speed: { type: number }
                   max_angular_speed: { type: number }
 
+  /video/stream:
+    get:
+      summary: MJPEG live camera stream
+      description: >
+        Provides a multipart MJPEG stream intended for teleoperation and
+        debugging UI panels.
+      responses:
+        '200':
+          description: MJPEG stream
+          content:
+            multipart/x-mixed-replace:
+              schema:
+                type: string
+                description: Multipart stream with image/jpeg frames
+        '500':
+          description: Stream initialization failure
+
   /voice/wake-word/status:
     get:
       summary: Get wake word detection status

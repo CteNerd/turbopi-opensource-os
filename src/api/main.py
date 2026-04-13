@@ -20,6 +20,7 @@ import urllib.parse
 import threading
 import re
 import asyncio
+import base64
 from typing import Optional, Dict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
@@ -34,6 +35,7 @@ except Exception as exc:
 # Add control/HAL imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from control import ControlArbiter, ControlWebSocketBridge
+from hal import CameraError, FakeCameraHAL
 
 # Import wake word engine and command parser (add path for imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'voice'))
@@ -56,6 +58,10 @@ except ImportError:
 
 
 SYSTEM_ACTION_DELAY_SECONDS = 0.5
+MJPEG_BOUNDARY = 'frame'
+FALLBACK_JPEG_BYTES = base64.b64decode(
+    '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAAQABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAVEAEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByA//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AYf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AYf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/Idf/2gAMAwEAAgADAAAAED//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=='
+)
 
 
 def is_valid_control_ws_origin(origin: Optional[str], host_header: Optional[str], ui_port: int) -> bool:
@@ -282,6 +288,10 @@ class APIHandler(BaseHTTPRequestHandler):
     # Global control arbiter for teleoperation
     _control_arbiter: Optional[ControlArbiter] = None
     _control_lock = threading.Lock()
+
+    # Global camera HAL for video streaming
+    _camera_hal: Optional[FakeCameraHAL] = None
+    _camera_lock = threading.Lock()
     
     @classmethod
     def get_wake_word_engine(cls):
@@ -315,6 +325,18 @@ class APIHandler(BaseHTTPRequestHandler):
                 cls._control_arbiter = ControlArbiter()
                 logging.info("Control arbiter initialized")
             return cls._control_arbiter
+
+    @classmethod
+    def get_camera_hal(cls):
+        """Get or create camera HAL singleton used by MJPEG stream endpoint."""
+        with cls._camera_lock:
+            if cls._camera_hal is None:
+                cls._camera_hal = FakeCameraHAL()
+                cls._camera_hal.open()
+                logging.info("Camera HAL initialized for video stream")
+            elif not cls._camera_hal.is_open():
+                cls._camera_hal.open()
+            return cls._camera_hal
 
     def log_message(self, format, *args):
         """Override to log to stdout instead of stderr"""
@@ -407,17 +429,22 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Handle GET requests"""
-        if self.path == '/health':
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        if path == '/health':
             self.handle_health()
-        elif self.path == '/control/state':
+        elif path == '/control/state':
             self.handle_control_state()
-        elif self.path == '/system/version':
+        elif path == '/system/version':
             self.handle_system_version()
-        elif self.path == '/updates/check':
+        elif path == '/updates/check':
             self.handle_updates_check()
-        elif self.path == '/voice/wake-word/status':
+        elif path == '/video/stream':
+            self.handle_video_stream(parsed.query)
+        elif path == '/voice/wake-word/status':
             self.handle_wake_word_status()
-        elif self.path == '/voice/wake-word/config':
+        elif path == '/voice/wake-word/config':
             self.handle_wake_word_get_config()
         else:
             self.send_error(404, "Not Found")
@@ -608,6 +635,55 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle GET /control/state endpoint."""
         arbiter = self.get_control_arbiter()
         self._send_json_response(200, arbiter.get_state().to_dict())
+
+    def handle_video_stream(self, query: str):
+        """Handle GET /video/stream endpoint with multipart MJPEG output."""
+        camera = self.get_camera_hal()
+        max_frames = 0
+        query_params = urllib.parse.parse_qs(query)
+        if 'frames' in query_params:
+            try:
+                max_frames = max(int(query_params['frames'][0]), 0)
+            except (ValueError, TypeError):
+                max_frames = 0
+
+        try:
+            calibration = camera.calibration
+            frame_interval_s = 1.0 / max(calibration.fps, 1)
+
+            self.send_response(200)
+            self.send_header('Content-Type', f'multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}')
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            self.send_header('Pragma', 'no-cache')
+            self.end_headers()
+
+            sent_frames = 0
+            while True:
+                try:
+                    camera.get_frame()
+                except CameraError:
+                    # Re-open once if the camera was closed by a service restart race.
+                    camera.open()
+                    camera.get_frame()
+
+                # The fake HAL currently returns RGB bytes; emit a deterministic JPEG frame for MJPEG clients.
+                jpeg_data = FALLBACK_JPEG_BYTES
+                payload = (
+                    f'--{MJPEG_BOUNDARY}\r\n'
+                    'Content-Type: image/jpeg\r\n'
+                    f'Content-Length: {len(jpeg_data)}\r\n\r\n'
+                ).encode('ascii') + jpeg_data + b'\r\n'
+
+                self.wfile.write(payload)
+                self.wfile.flush()
+                sent_frames += 1
+                if max_frames and sent_frames >= max_frames:
+                    break
+                time.sleep(frame_interval_s)
+        except (BrokenPipeError, ConnectionResetError):
+            logging.info('Video stream client disconnected')
+        except Exception as exc:
+            logging.error('Video stream error: %s', exc)
     
     def handle_updates_apply(self):
         """Handle /updates/apply endpoint"""
