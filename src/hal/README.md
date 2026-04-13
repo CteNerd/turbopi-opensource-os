@@ -55,11 +55,14 @@ Invalid or missing values fall back to safe defaults.
 Run HAL-focused tests:
 
 ```bash
-/opt/homebrew/bin/python3 -m pytest src/hal/test_motor.py src/hal/test_camera.py src/hal/test_sensor.py -q
+python3 -m pytest src/hal/test_motor.py src/hal/test_camera.py src/hal/test_sensor.py -q
 ```
 
 Run HAL tests plus related safety checks:
 
 ```bash
-/opt/homebrew/bin/python3 -m pytest src/hal/test_motor.py src/hal/test_camera.py src/hal/test_sensor.py src/voice/test_wake_word.py src/api/test_wake_word_api.py -q
+python3 -m pytest src/hal/test_motor.py src/hal/test_camera.py src/hal/test_sensor.py src/voice/test_wake_word.py src/api/test_wake_word_api.py -q
 ```
+
+Current test layout uses top-level HAL test modules under `src/hal/`
+(for example, `src/hal/test_motor.py`) rather than a nested `src/hal/tests/` folder.

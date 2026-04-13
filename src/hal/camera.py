@@ -12,6 +12,9 @@ class CameraError(Exception):
     """Raised when camera operations fail or are used incorrectly."""
 
 
+SUPPORTED_PIXEL_FORMATS = {'rgb24'}
+
+
 def _get_int(name: str, default: int) -> int:
     """Read an integer from the environment with a safe default."""
     value = os.environ.get(name)
@@ -36,11 +39,14 @@ class CameraCalibration:
     @classmethod
     def from_env(cls) -> 'CameraCalibration':
         """Load camera configuration from environment variables."""
+        requested_format = os.environ.get('HAL_CAMERA_PIXEL_FORMAT', 'rgb24').lower().strip()
+        pixel_format = requested_format if requested_format in SUPPORTED_PIXEL_FORMATS else 'rgb24'
+
         return cls(
             width=max(_get_int('HAL_CAMERA_WIDTH', 640), 1),
             height=max(_get_int('HAL_CAMERA_HEIGHT', 480), 1),
             fps=max(_get_int('HAL_CAMERA_FPS', 30), 1),
-            pixel_format=os.environ.get('HAL_CAMERA_PIXEL_FORMAT', 'rgb24'),
+            pixel_format=pixel_format,
         )
 
 

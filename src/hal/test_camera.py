@@ -28,6 +28,12 @@ class TestCameraHAL(unittest.TestCase):
         self.assertEqual(calibration.fps, 15)
         self.assertEqual(calibration.pixel_format, 'rgb24')
 
+    def test_camera_calibration_falls_back_for_unsupported_format(self):
+        with patch.dict(os.environ, {'HAL_CAMERA_PIXEL_FORMAT': 'gray8'}, clear=False):
+            calibration = CameraCalibration.from_env()
+
+        self.assertEqual(calibration.pixel_format, 'rgb24')
+
     def test_camera_must_be_open_before_capture(self):
         hal = FakeCameraHAL()
 
