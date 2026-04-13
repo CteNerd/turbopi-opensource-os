@@ -137,11 +137,19 @@ def _cached_service_states() -> Dict[str, str]:
         if age <= SERVICE_STATE_CACHE_TTL_SECONDS and _SERVICE_STATE_CACHE['states']:
             return dict(_SERVICE_STATE_CACHE['states'])
 
+        # Query all required services in one systemctl invocation.
+        service_names = ['turbopi-api', 'turbopi-ui', 'turbopi-updater', 'turbopi-wake-word']
+        raw_states = _safe_run(['systemctl', 'is-active', *service_names], timeout=2)
+        lines = [line.strip() for line in raw_states.splitlines() if line.strip()]
+        mapped = ['unknown'] * len(service_names)
+        for idx in range(min(len(lines), len(service_names))):
+            mapped[idx] = lines[idx]
+
         states = {
-            'api': _service_state('turbopi-api'),
-            'ui': _service_state('turbopi-ui'),
-            'updater': _service_state('turbopi-updater'),
-            'wake_word': _service_state('turbopi-wake-word'),
+            'api': mapped[0],
+            'ui': mapped[1],
+            'updater': mapped[2],
+            'wake_word': mapped[3],
         }
         _SERVICE_STATE_CACHE['timestamp'] = now
         _SERVICE_STATE_CACHE['states'] = states

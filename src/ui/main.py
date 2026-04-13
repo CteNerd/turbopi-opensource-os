@@ -482,7 +482,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
-                URL.revokeObjectURL(objectUrl);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
                 showDiagnosticsAlert('Diagnostics bundle downloaded.', 'success');
             }} catch (error) {{
                 showDiagnosticsAlert('Error downloading diagnostics bundle: ' + error.message, 'error');
@@ -808,7 +808,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             refreshControlState();
             refreshSystemStatus();
             setInterval(refreshControlState, 500);
-            setInterval(refreshSystemStatus, 2000);
+            setInterval(refreshSystemStatus, 5000);
         }});
     </script>
 </body>
