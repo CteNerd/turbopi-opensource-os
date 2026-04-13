@@ -19,9 +19,21 @@ import urllib.error
 import urllib.parse
 import threading
 import re
+import asyncio
 from typing import Optional, Dict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
+
+try:
+    from websockets.legacy.server import serve as ws_serve
+    WS_IMPORT_ERROR = None
+except Exception as exc:
+    ws_serve = None
+    WS_IMPORT_ERROR = exc
+
+# Add control/HAL imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from control import ControlArbiter, ControlWebSocketBridge
 
 # Import wake word engine and command parser (add path for imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'voice'))
@@ -44,6 +56,22 @@ except ImportError:
 
 
 SYSTEM_ACTION_DELAY_SECONDS = 0.5
+
+
+def is_valid_control_ws_origin(origin: Optional[str], host_header: Optional[str], ui_port: int) -> bool:
+    """Validate websocket control connections come from same-host UI origin."""
+    if not origin or not host_header:
+        return False
+
+    parsed_origin = urllib.parse.urlparse(origin)
+    if parsed_origin.scheme not in ('http', 'https') or not parsed_origin.hostname:
+        return False
+
+    request_host = host_header.split(':', 1)[0].lower()
+    if parsed_origin.hostname.lower() != request_host:
+        return False
+
+    return parsed_origin.port == ui_port
 
 
 def get_current_version() -> str:
@@ -250,6 +278,10 @@ class APIHandler(BaseHTTPRequestHandler):
     # Global command parser instance (shared across requests)
     _command_parser: Optional['CommandIntentParser'] = None
     _command_parser_lock = threading.Lock()
+
+    # Global control arbiter for teleoperation
+    _control_arbiter: Optional[ControlArbiter] = None
+    _control_lock = threading.Lock()
     
     @classmethod
     def get_wake_word_engine(cls):
@@ -274,6 +306,15 @@ class APIHandler(BaseHTTPRequestHandler):
                 cls._command_parser = CommandIntentParser()
                 logging.info("Command intent parser initialized")
             return cls._command_parser
+
+    @classmethod
+    def get_control_arbiter(cls):
+        """Get or create control arbiter singleton."""
+        with cls._control_lock:
+            if cls._control_arbiter is None:
+                cls._control_arbiter = ControlArbiter()
+                logging.info("Control arbiter initialized")
+            return cls._control_arbiter
 
     def log_message(self, format, *args):
         """Override to log to stdout instead of stderr"""
@@ -368,6 +409,8 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle GET requests"""
         if self.path == '/health':
             self.handle_health()
+        elif self.path == '/control/state':
+            self.handle_control_state()
         elif self.path == '/system/version':
             self.handle_system_version()
         elif self.path == '/updates/check':
@@ -383,6 +426,14 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle POST requests"""
         if self.path == '/updates/apply':
             self.handle_updates_apply()
+        elif self.path == '/control/arm':
+            self.handle_control_arm()
+        elif self.path == '/control/disarm':
+            self.handle_control_disarm()
+        elif self.path == '/control/estop':
+            self.handle_control_estop()
+        elif self.path == '/control/estop/reset':
+            self.handle_control_estop_reset()
         elif self.path == '/system/restart':
             self.handle_system_restart()
         elif self.path == '/system/reboot':
@@ -522,6 +573,41 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"Updates check endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to check for updates")
+
+    def handle_control_arm(self):
+        """Handle POST /control/arm endpoint."""
+        if not self._require_ui_origin():
+            return
+        arbiter = self.get_control_arbiter()
+        result = arbiter.arm()
+        status_code = 200 if result.get('status') == 'armed' else 409
+        self._send_json_response(status_code, result)
+
+    def handle_control_disarm(self):
+        """Handle POST /control/disarm endpoint."""
+        if not self._require_ui_origin():
+            return
+        arbiter = self.get_control_arbiter()
+        self._send_json_response(200, arbiter.disarm())
+
+    def handle_control_estop(self):
+        """Handle POST /control/estop endpoint."""
+        if not self._require_ui_origin():
+            return
+        arbiter = self.get_control_arbiter()
+        self._send_json_response(200, arbiter.engage_estop())
+
+    def handle_control_estop_reset(self):
+        """Handle POST /control/estop/reset endpoint."""
+        if not self._require_ui_origin():
+            return
+        arbiter = self.get_control_arbiter()
+        self._send_json_response(200, arbiter.clear_estop())
+
+    def handle_control_state(self):
+        """Handle GET /control/state endpoint."""
+        arbiter = self.get_control_arbiter()
+        self._send_json_response(200, arbiter.get_state().to_dict())
     
     def handle_updates_apply(self):
         """Handle /updates/apply endpoint"""
@@ -891,6 +977,18 @@ def main():
     except ValueError as e:
         logging.error(f"Invalid API_PORT configuration: {e}")
         sys.exit(1)
+
+    try:
+        ws_port = int(os.environ.get('API_WS_PORT', '8765'))
+        if not (1 <= ws_port <= 65535):
+            raise ValueError(f"WebSocket port must be between 1 and 65535, got {ws_port}")
+    except ValueError as e:
+        logging.error(f"Invalid API_WS_PORT configuration: {e}")
+        sys.exit(1)
+
+    if ws_serve is None:
+        logging.error('websockets package is required for /ws/control channel: %s', WS_IMPORT_ERROR)
+        sys.exit(1)
     
     robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
 
@@ -898,6 +996,43 @@ def main():
     logging.info(f"Robot Name: {robot_name}")
     logging.info(f"Listening on {host}:{port}")
     logging.info(f"Health endpoint: http://{host}:{port}/health")
+
+    # Start websocket control channel in a background thread.
+    arbiter = APIHandler.get_control_arbiter()
+    bridge = ControlWebSocketBridge(arbiter)
+    ui_port = int(os.environ.get('UI_PORT', '8081'))
+
+    def run_websocket_server():
+        async def ws_handler(websocket, path):
+            if path != '/ws/control':
+                await websocket.close(code=1008, reason='Invalid path')
+                return
+
+            origin = websocket.request_headers.get('Origin')
+            host_header = websocket.request_headers.get('Host')
+            if not is_valid_control_ws_origin(origin, host_header, ui_port):
+                await websocket.close(code=1008, reason='Forbidden origin')
+                return
+
+            connection_id = id(websocket)
+            bridge.connect(connection_id)
+            try:
+                async for message in websocket:
+                    result = bridge.handle_text(connection_id, message)
+                    await websocket.send(json.dumps(result))
+            finally:
+                bridge.disconnect(connection_id)
+
+        async def runner():
+            async with ws_serve(ws_handler, host, ws_port):
+                logging.info(f"Control WebSocket listening on ws://{host}:{ws_port}/ws/control")
+                while True:
+                    APIHandler.get_control_arbiter().check_safety()
+                    await asyncio.sleep(0.05)
+
+        asyncio.run(runner())
+
+    threading.Thread(target=run_websocket_server, daemon=True).start()
 
     # Create and start HTTP server
     server = HTTPServer((host, port), APIHandler)

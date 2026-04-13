@@ -146,6 +146,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .version-info p {{
             margin: 5px 0;
         }}
+        .joystick-wrap {{
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            align-items: center;
+        }}
+        .joystick-pad {{
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            border: 2px solid #bdbdbd;
+            position: relative;
+            background: radial-gradient(circle at center, #f5f5f5 0%, #ececec 70%, #e0e0e0 100%);
+            touch-action: none;
+        }}
+        .joystick-knob {{
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: #607d8b;
+            position: absolute;
+            left: 81px;
+            top: 81px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }}
+        .control-stats p {{
+            margin: 6px 0;
+        }}
     </style>
 </head>
 <body>
@@ -213,10 +241,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 accessible again.
             </div>
         </div>
+
+        <div class="section">
+            <h2>Teleoperation</h2>
+            <div id="control-alert" class="alert"></div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+                <button class="button" onclick="armMotors()">Arm</button>
+                <button class="button button-warning" onclick="disarmMotors()">Disarm</button>
+                <button class="button button-danger" onclick="engageEstop()">E-Stop</button>
+                <button class="button button-secondary" onclick="resetEstop()">Reset E-Stop</button>
+            </div>
+            <div class="joystick-wrap">
+                <div id="joystickPad" class="joystick-pad">
+                    <div id="joystickKnob" class="joystick-knob"></div>
+                </div>
+                <div class="control-stats">
+                    <p>WebSocket: <span id="wsStatus" class="current-value">connecting...</span></p>
+                    <p>Armed: <span id="armedValue" class="current-value">no</span></p>
+                    <p>E-Stop Latched: <span id="estopValue" class="current-value">no</span></p>
+                    <p>Deadman Triggered: <span id="deadmanValue" class="current-value">no</span></p>
+                    <p>Drive Linear: <span id="linearValue" class="current-value">0.00</span> m/s</p>
+                    <p>Drive Angular: <span id="angularValue" class="current-value">0.00</span> rad/s</p>
+                    <p class="info">Disconnect or missing heartbeat triggers immediate STOP.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         const API_BASE = 'http://' + window.location.hostname + ':{api_port}';
+        const WS_BASE = 'ws://' + window.location.hostname + ':{ws_port}';
+        const CONTROL_WS_PATH = '/ws/control';
+        let controlSocket = null;
+        let heartbeatTimer = null;
+        let dragActive = false;
+        let controlMaxLinear = 0.5;
+        let controlMaxAngular = 1.2;
 
         // Load current wake word configuration on page load
         async function loadWakeWordConfig() {{
@@ -307,6 +367,163 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             alertDiv.style.display = 'block';
             if (type === 'success') {{
                 setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 4000);
+            }}
+        }}
+
+        function showControlAlert(message, type) {{
+            const alertDiv = document.getElementById('control-alert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert ' + type;
+            alertDiv.style.display = 'block';
+            if (type === 'success') {{
+                setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 2500);
+            }}
+        }}
+
+        async function armMotors() {{
+            const response = await fetch(API_BASE + '/control/arm', {{ method: 'POST' }});
+            const payload = await parseApiPayload(response);
+            if (!response.ok) {{
+                showControlAlert(payload.message || 'Failed to arm', 'error');
+                return;
+            }}
+            showControlAlert('Motors armed', 'success');
+        }}
+
+        async function disarmMotors() {{
+            const response = await fetch(API_BASE + '/control/disarm', {{ method: 'POST' }});
+            const payload = await parseApiPayload(response);
+            if (!response.ok) {{
+                showControlAlert(payload.message || 'Failed to disarm', 'error');
+                return;
+            }}
+            stopJoystick();
+            showControlAlert('Motors disarmed', 'success');
+        }}
+
+        async function engageEstop() {{
+            const response = await fetch(API_BASE + '/control/estop', {{ method: 'POST' }});
+            const payload = await parseApiPayload(response);
+            if (!response.ok) {{
+                showControlAlert(payload.message || 'Failed to engage E-Stop', 'error');
+                return;
+            }}
+            stopJoystick();
+            showControlAlert('E-Stop engaged', 'error');
+            await refreshControlState();
+        }}
+
+        async function resetEstop() {{
+            const response = await fetch(API_BASE + '/control/estop/reset', {{ method: 'POST' }});
+            const payload = await parseApiPayload(response);
+            if (!response.ok) {{
+                showControlAlert(payload.message || 'Failed to reset E-Stop', 'error');
+                return;
+            }}
+            showControlAlert('E-Stop reset. Arm to drive again.', 'success');
+            await refreshControlState();
+        }}
+
+        function connectControlSocket() {{
+            controlSocket = new WebSocket(WS_BASE + CONTROL_WS_PATH);
+            controlSocket.onopen = () => {{
+                document.getElementById('wsStatus').textContent = 'connected';
+                heartbeatTimer = setInterval(() => {{
+                    if (controlSocket && controlSocket.readyState === WebSocket.OPEN) {{
+                        controlSocket.send(JSON.stringify({{ type: 'heartbeat' }}));
+                    }}
+                }}, 200);
+            }};
+            controlSocket.onclose = () => {{
+                document.getElementById('wsStatus').textContent = 'disconnected';
+                if (heartbeatTimer) clearInterval(heartbeatTimer);
+                setTimeout(connectControlSocket, 1000);
+            }};
+        }}
+
+        function sendDrive(linear, angular) {{
+            document.getElementById('linearValue').textContent = linear.toFixed(2);
+            document.getElementById('angularValue').textContent = angular.toFixed(2);
+            if (!controlSocket || controlSocket.readyState !== WebSocket.OPEN) return;
+            controlSocket.send(JSON.stringify({{
+                type: 'drive',
+                linear: linear,
+                angular: angular
+            }}));
+        }}
+
+        function stopJoystick() {{
+            document.getElementById('joystickKnob').style.left = '81px';
+            document.getElementById('joystickKnob').style.top = '81px';
+            if (controlSocket && controlSocket.readyState === WebSocket.OPEN) {{
+                controlSocket.send(JSON.stringify({{ type: 'stop' }}));
+            }}
+            document.getElementById('linearValue').textContent = '0.00';
+            document.getElementById('angularValue').textContent = '0.00';
+        }}
+
+        function setupJoystick() {{
+            const pad = document.getElementById('joystickPad');
+            const knob = document.getElementById('joystickKnob');
+            const radius = 81;
+
+            function updateFromEvent(event) {{
+                const rect = pad.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                let dx = event.clientX - centerX;
+                let dy = event.clientY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > radius) {{
+                    dx = (dx / distance) * radius;
+                    dy = (dy / distance) * radius;
+                }}
+
+                knob.style.left = (81 + dx) + 'px';
+                knob.style.top = (81 + dy) + 'px';
+
+                const linear = (-dy / radius) * controlMaxLinear;
+                const angular = (dx / radius) * controlMaxAngular;
+                sendDrive(linear, angular);
+            }}
+
+            pad.addEventListener('pointerdown', (event) => {{
+                dragActive = true;
+                pad.setPointerCapture(event.pointerId);
+                updateFromEvent(event);
+            }});
+
+            pad.addEventListener('pointermove', (event) => {{
+                if (!dragActive) return;
+                updateFromEvent(event);
+            }});
+
+            function release() {{
+                dragActive = false;
+                stopJoystick();
+            }}
+
+            pad.addEventListener('pointerup', release);
+            pad.addEventListener('pointercancel', release);
+            pad.addEventListener('pointerleave', () => {{ if (dragActive) release(); }});
+        }}
+
+        async function refreshControlState() {{
+            try {{
+                const response = await fetch(API_BASE + '/control/state');
+                if (!response.ok) return;
+                const data = await response.json();
+                document.getElementById('armedValue').textContent = data.armed ? 'yes' : 'no';
+                document.getElementById('estopValue').textContent = data.estop_latched ? 'yes' : 'no';
+                document.getElementById('deadmanValue').textContent = data.deadman_triggered ? 'yes' : 'no';
+                if (typeof data.max_linear_speed === 'number') {{
+                    controlMaxLinear = data.max_linear_speed;
+                }}
+                if (typeof data.max_angular_speed === 'number') {{
+                    controlMaxAngular = data.max_angular_speed;
+                }}
+            }} catch (error) {{
+                // Keep UI responsive when API is restarting.
             }}
         }}
 
@@ -440,6 +657,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         window.addEventListener('DOMContentLoaded', () => {{
             loadWakeWordConfig();
             loadVersionInfo();
+            connectControlSocket();
+            setupJoystick();
+            refreshControlState();
+            setInterval(refreshControlState, 500);
         }});
     </script>
 </body>
@@ -465,8 +686,9 @@ class UIHandler(SimpleHTTPRequestHandler):
             
             robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
             api_port = os.environ.get('API_PORT', '8080')
+            ws_port = os.environ.get('API_WS_PORT', '8765')
             
-            html = HTML_TEMPLATE.format(robot_name=robot_name, api_port=api_port)
+            html = HTML_TEMPLATE.format(robot_name=robot_name, api_port=api_port, ws_port=ws_port)
             self.wfile.write(html.encode())
         else:
             self.send_error(404, "Not Found")

@@ -265,20 +265,123 @@ paths:
   /control/arm:
     post:
       summary: Arm motors
+      description: Arms manual control if E-Stop is not latched.
       responses:
-        '200': { description: Armed }
+        '200':
+          description: Armed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "armed" }
+        '409':
+          description: Arm blocked (for example E-Stop latched)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "blocked" }
+                  message: { type: string }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /control/disarm:
     post:
       summary: Disarm motors
+      description: Disarms motors and forces zero output.
       responses:
-        '200': { description: Disarmed }
+        '200':
+          description: Disarmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "disarmed" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /control/estop:
     post:
       summary: Emergency stop
+      description: Latches E-Stop and immediately disarms/stops motors.
       responses:
-        '200': { description: E-Stop engaged }
+        '200':
+          description: E-Stop engaged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "estop_engaged" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
+
+  /control/estop/reset:
+    post:
+      summary: Reset latched E-Stop
+      description: Clears E-Stop latch. Motors remain disarmed until explicitly armed.
+      responses:
+        '200':
+          description: E-Stop reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "estop_cleared" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
+
+  /control/state:
+    get:
+      summary: Get current control safety state
+      responses:
+        '200':
+          description: Current control and safety state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  armed: { type: boolean }
+                  estop_latched: { type: boolean }
+                  mode: { type: string }
+                  deadman_triggered: { type: boolean }
+                  linear_mps: { type: number }
+                  angular_rps: { type: number }
+                  max_linear_speed: { type: number }
+                  max_angular_speed: { type: number }
 
   /voice/wake-word/status:
     get:

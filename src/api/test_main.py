@@ -18,6 +18,7 @@ from main import (
     normalize_version,
     is_newer_version,
     fetch_latest_stable_release,
+    is_valid_control_ws_origin,
 )
 
 
@@ -312,6 +313,23 @@ class TestTriggerSystemUpdate(unittest.TestCase):
         mock_open.assert_called_once()
         self.assertIn('update-trigger.json', mock_open.call_args[0][0])
         self.assertEqual('w', mock_open.call_args[0][1])
+
+
+class TestControlWebSocketOriginValidation(unittest.TestCase):
+    """Tests for websocket control origin validation."""
+
+    def test_valid_same_host_origin(self):
+        self.assertTrue(is_valid_control_ws_origin('http://localhost:8081', 'localhost:8765', 8081))
+
+    def test_invalid_origin_port(self):
+        self.assertFalse(is_valid_control_ws_origin('http://localhost:8082', 'localhost:8765', 8081))
+
+    def test_invalid_origin_host(self):
+        self.assertFalse(is_valid_control_ws_origin('http://evil.local:8081', 'localhost:8765', 8081))
+
+    def test_missing_headers(self):
+        self.assertFalse(is_valid_control_ws_origin(None, 'localhost:8765', 8081))
+        self.assertFalse(is_valid_control_ws_origin('http://localhost:8081', None, 8081))
 
 
 if __name__ == '__main__':

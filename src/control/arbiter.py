@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Safety-aware control arbiter for manual teleoperation."""
+
+import os
+import time
+from dataclasses import dataclass
+from typing import Dict
+
+from hal.motor import MotorSafetyError, SimulatedMotorHAL, VelocityCommand
+
+
+def _get_float(name: str, default: float) -> float:
+    """Read float config values with safe defaults."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _get_int(name: str, default: int) -> int:
+    """Read integer config values with safe defaults."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    """Clamp values to an inclusive range."""
+    return max(minimum, min(value, maximum))
+
+
+@dataclass(frozen=True)
+class ControlState:
+    """Immutable control state snapshot exposed via API and websocket status."""
+
+    armed: bool
+    estop_latched: bool
+    mode: str
+    deadman_triggered: bool
+    linear_mps: float
+    angular_rps: float
+    max_linear_speed: float
+    max_angular_speed: float
+
+    def to_dict(self) -> Dict[str, object]:
+        """Serialize to JSON-friendly dictionary."""
+        return {
+            'armed': self.armed,
+            'estop_latched': self.estop_latched,
+            'mode': self.mode,
+            'deadman_triggered': self.deadman_triggered,
+            'linear_mps': self.linear_mps,
+            'angular_rps': self.angular_rps,
+            'max_linear_speed': self.max_linear_speed,
+            'max_angular_speed': self.max_angular_speed,
+        }
+
+
+class ControlArbiter:
+    """Arbiter that enforces safety before forwarding commands to motor HAL."""
+
+    def __init__(self, motor_hal=None):
+        self.motor_hal = motor_hal or SimulatedMotorHAL()
+        self.max_linear_speed = max(_get_float('MAX_LINEAR_SPEED', 0.5), 0.01)
+        self.max_angular_speed = max(_get_float('MAX_ANGULAR_SPEED', 1.2), 0.01)
+        self.deadman_timeout_s = max(_get_int('DEADMAN_TIMEOUT_MS', 500), 1) / 1000.0
+        self.estop_latched = False
+        self.deadman_triggered = False
+        self.last_heartbeat = time.monotonic()
+        self.last_linear = 0.0
+        self.last_angular = 0.0
+
+    def get_state(self) -> ControlState:
+        """Return current control state for API/UI status updates."""
+        return ControlState(
+            armed=self.motor_hal.get_state().armed,
+            estop_latched=self.estop_latched,
+            mode='manual' if self.motor_hal.get_state().armed else 'disabled',
+            deadman_triggered=self.deadman_triggered,
+            linear_mps=self.last_linear,
+            angular_rps=self.last_angular,
+            max_linear_speed=self.max_linear_speed,
+            max_angular_speed=self.max_angular_speed,
+        )
+
+    def arm(self) -> Dict[str, object]:
+        """Arm control path unless E-Stop is latched."""
+        if self.estop_latched:
+            return {'status': 'blocked', 'message': 'Cannot arm while E-Stop is latched'}
+
+        self.motor_hal.arm()
+        self.deadman_triggered = False
+        self.last_heartbeat = time.monotonic()
+        return {'status': 'armed'}
+
+    def disarm(self) -> Dict[str, object]:
+        """Disarm control path and stop all motion."""
+        self.motor_hal.disarm()
+        self.last_linear = 0.0
+        self.last_angular = 0.0
+        return {'status': 'disarmed'}
+
+    def engage_estop(self) -> Dict[str, object]:
+        """Latch E-Stop and force immediate stop/disarm."""
+        self.estop_latched = True
+        self.motor_hal.disarm()
+        self.last_linear = 0.0
+        self.last_angular = 0.0
+        return {'status': 'estop_engaged'}
+
+    def clear_estop(self) -> Dict[str, object]:
+        """Clear E-Stop latch, keeping motors disarmed until explicit arm."""
+        self.estop_latched = False
+        self.deadman_triggered = False
+        return {'status': 'estop_cleared'}
+
+    def heartbeat(self) -> None:
+        """Record liveness signal from active control client."""
+        self.last_heartbeat = time.monotonic()
+
+    def apply_drive(self, linear_mps: float, angular_rps: float) -> Dict[str, object]:
+        """Validate and route manual drive command through motor HAL."""
+        self._enforce_deadman()
+        if self.estop_latched:
+            return {'status': 'blocked', 'message': 'E-Stop is latched'}
+        if not self.motor_hal.get_state().armed:
+            return {'status': 'ignored', 'message': 'Robot is disarmed'}
+
+        linear = _clamp(linear_mps, -self.max_linear_speed, self.max_linear_speed)
+        angular = _clamp(angular_rps, -self.max_angular_speed, self.max_angular_speed)
+
+        try:
+            self.motor_hal.set_velocity(VelocityCommand(linear_mps=linear, angular_rps=angular))
+        except MotorSafetyError as exc:
+            return {'status': 'error', 'message': str(exc)}
+
+        self.last_linear = linear
+        self.last_angular = angular
+        return {
+            'status': 'ok',
+            'linear_mps': linear,
+            'angular_rps': angular,
+        }
+
+    def stop(self) -> Dict[str, object]:
+        """Stop motion while preserving arm state."""
+        self.motor_hal.stop()
+        self.last_linear = 0.0
+        self.last_angular = 0.0
+        return {'status': 'stopped'}
+
+    def on_disconnect(self) -> Dict[str, object]:
+        """Safety behavior when control channel disconnects."""
+        self.deadman_triggered = True
+        return self.stop()
+
+    def check_safety(self) -> None:
+        """Public hook for timers/loops to enforce deadman timeout."""
+        self._enforce_deadman()
+
+    def _enforce_deadman(self) -> None:
+        """Stop motion if heartbeat timeout is exceeded while armed."""
+        if not self.motor_hal.get_state().armed:
+            return
+        if (time.monotonic() - self.last_heartbeat) > self.deadman_timeout_s:
+            self.deadman_triggered = True
+            self.stop()
