@@ -11,9 +11,8 @@ import argparse
 import json
 import math
 import os
-import statistics
 from dataclasses import asdict, dataclass
-from typing import Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import Dict, Iterable, List, Protocol
 
 
 @dataclass(frozen=True)
@@ -150,15 +149,15 @@ def run_benchmark(
 def build_markdown_summary(results: List[BenchmarkResult]) -> str:
     """Build markdown table for docs and PR description usage."""
     header = (
-        "| Model | Resolution | FPS | P50 (ms) | P95 (ms) | Max CPU Temp (C) | "
-        "Stable |\n"
-        "| --- | ---: | ---: | ---: | ---: | ---: | --- |"
+        "Model | Resolution | FPS | P50 (ms) | P95 (ms) | Max CPU Temp (C) | "
+        "Stable\n"
+        "--- | ---: | ---: | ---: | ---: | ---: | ---"
     )
     rows = []
     for result in results:
         rows.append(
-            "| {model} | {resolution}p | {fps:.2f} | {p50:.2f} | {p95:.2f} | "
-            "{temp:.1f} | {stable} |".format(
+            "{model} | {resolution}p | {fps:.2f} | {p50:.2f} | {p95:.2f} | "
+            "{temp:.1f} | {stable}".format(
                 model=result.model,
                 resolution=result.resolution,
                 fps=result.fps,

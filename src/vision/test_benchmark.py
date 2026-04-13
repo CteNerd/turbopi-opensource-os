@@ -51,7 +51,7 @@ class TestBenchmarkHarness(unittest.TestCase):
         )
         markdown = build_markdown_summary(results)
 
-        self.assertIn("| Model | Resolution | FPS | P50 (ms) | P95 (ms) | Max CPU Temp (C) | Stable |", markdown)
+        self.assertIn("Model | Resolution | FPS | P50 (ms) | P95 (ms) | Max CPU Temp (C) | Stable", markdown)
         self.assertIn("yolov5n_int8", markdown)
         self.assertIn("320p", markdown)
 
