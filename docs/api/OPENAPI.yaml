@@ -45,6 +45,15 @@ paths:
       responses:
         '202':
           description: Restart initiated
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /system/reboot:
     post:
@@ -52,6 +61,15 @@ paths:
       responses:
         '202':
           description: Reboot initiated
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
 
   /updates/check:
     get:
@@ -89,6 +107,15 @@ paths:
                   status: { type: string, example: "update_started" }
                   message: { type: string, example: "Update to version 0.1.5 has been initiated" }
                   version: { type: string, example: "0.1.5" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
         '500':
           description: Failed to fetch release information or verify integrity
           content:

@@ -310,6 +310,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
         }}
 
+        async function parseApiPayload(response) {{
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {{
+                return await response.json();
+            }}
+
+            const text = await response.text();
+            return text ? {{ message: text }} : {{}};
+        }}
+
+        async function getApiErrorMessage(response, fallbackMessage) {{
+            const payload = await parseApiPayload(response);
+            return payload.message || payload.error || fallbackMessage;
+        }}
+
         async function loadVersionInfo() {{
             try {{
                 const response = await fetch(API_BASE + '/system/version');
@@ -360,7 +375,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             showUpdateAlert('Update started. Services will restart shortly — this page may be temporarily unavailable.', 'success');
             try {{
                 const response = await fetch(API_BASE + '/updates/apply', {{ method: 'POST' }});
-                const data = await response.json();
+                const data = await parseApiPayload(response);
+
+                if (!response.ok) {{
+                    throw new Error(data.message || data.error || 'Update failed');
+                }}
+
                 if (response.status === 200) {{
                     showUpdateAlert(data.message || 'Already on latest version.', 'success');
                 }} else if (response.status === 202) {{
@@ -382,9 +402,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (!confirm('Restart all TurboPi services? The page will be briefly unavailable.')) return;
             showSystemAlert('Restarting services…', 'success');
             try {{
-                await fetch(API_BASE + '/system/restart', {{ method: 'POST' }});
-            }} catch (_) {{
-                // Expected — connection will drop during restart
+                const response = await fetch(API_BASE + '/system/restart', {{ method: 'POST' }});
+                if (!response.ok) {{
+                    throw new Error(await getApiErrorMessage(response, 'Restart request failed.'));
+                }}
+            }} catch (error) {{
+                if (error instanceof TypeError) {{
+                    showSystemAlert('Services are restarting. Reload this page in 10–15 seconds.', 'success');
+                    return;
+                }}
+                showSystemAlert('Error restarting services: ' + error.message, 'error');
+                return;
             }}
             showSystemAlert('Services are restarting. Reload this page in 10–15 seconds.', 'success');
         }}
@@ -393,9 +421,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (!confirm('Reboot the robot? It will be offline for about 30–60 seconds.')) return;
             showSystemAlert('Rebooting…', 'success');
             try {{
-                await fetch(API_BASE + '/system/reboot', {{ method: 'POST' }});
-            }} catch (_) {{
-                // Expected — connection will drop during reboot
+                const response = await fetch(API_BASE + '/system/reboot', {{ method: 'POST' }});
+                if (!response.ok) {{
+                    throw new Error(await getApiErrorMessage(response, 'Reboot request failed.'));
+                }}
+            }} catch (error) {{
+                if (error instanceof TypeError) {{
+                    showSystemAlert('Robot is rebooting. Reload this page in 30–60 seconds.', 'success');
+                    return;
+                }}
+                showSystemAlert('Error rebooting robot: ' + error.message, 'error');
+                return;
             }}
             showSystemAlert('Robot is rebooting. Reload this page in 30–60 seconds.', 'success');
         }}

@@ -92,7 +92,7 @@ def test_updates_apply_endpoint():
         try:
             # Make POST request to /updates/apply
             conn = http.client.HTTPConnection('localhost', 18080, timeout=5)
-            conn.request('POST', '/updates/apply')
+            conn.request('POST', '/updates/apply', headers={'Origin': 'http://localhost:8081'})
             response = conn.getresponse()
             
             # Read response body

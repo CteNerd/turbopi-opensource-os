@@ -12,8 +12,11 @@ import os
 import sys
 import json
 import logging
+import subprocess
+import time
 import urllib.request
 import urllib.error
+import urllib.parse
 import threading
 import re
 from typing import Optional, Dict
@@ -38,6 +41,9 @@ try:
 except ImportError:
     COMMAND_PARSER_AVAILABLE = False
     logging.warning("Command intent parser not available")
+
+
+SYSTEM_ACTION_DELAY_SECONDS = 0.5
 
 
 def get_current_version() -> str:
@@ -276,9 +282,79 @@ class APIHandler(BaseHTTPRequestHandler):
                          self.log_date_time_string(),
                          format % args))
 
+    def _send_json_response(self, status_code: int, payload: Dict):
+        """Send a JSON response with the provided status code."""
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode())
+
+    def _get_allowed_ui_origin(self) -> Optional[str]:
+        """Return the allowed UI origin for this request when present."""
+        origin = self.headers.get('Origin')
+        if not origin:
+            return None
+
+        parsed_origin = urllib.parse.urlparse(origin)
+        if parsed_origin.scheme not in ('http', 'https') or not parsed_origin.hostname:
+            return None
+
+        request_host = (self.headers.get('Host') or '').split(':', 1)[0].lower()
+        if not request_host:
+            return None
+
+        ui_port = int(os.environ.get('UI_PORT', '8081'))
+        if parsed_origin.port != ui_port:
+            return None
+
+        if parsed_origin.hostname.lower() != request_host:
+            return None
+
+        return f"{parsed_origin.scheme}://{parsed_origin.netloc}"
+
+    def _require_ui_origin(self) -> bool:
+        """Require a same-host UI origin for dangerous system actions."""
+        header_value = self.headers.get('Origin') or self.headers.get('Referer')
+        if not header_value:
+            self._send_json_response(403, {
+                'error': 'forbidden',
+                'message': 'Requests to this endpoint must originate from the TurboPi UI.'
+            })
+            return False
+
+        parsed_header = urllib.parse.urlparse(header_value)
+        if parsed_header.scheme not in ('http', 'https') or not parsed_header.hostname:
+            self._send_json_response(403, {
+                'error': 'forbidden',
+                'message': 'Requests to this endpoint must originate from the TurboPi UI.'
+            })
+            return False
+
+        request_host = (self.headers.get('Host') or '').split(':', 1)[0].lower()
+        ui_port = int(os.environ.get('UI_PORT', '8081'))
+        if parsed_header.hostname.lower() != request_host or parsed_header.port != ui_port:
+            self._send_json_response(403, {
+                'error': 'forbidden',
+                'message': 'Requests to this endpoint must originate from the TurboPi UI.'
+            })
+            return False
+
+        return True
+
+    def _run_delayed_command(self, command, timeout: int):
+        """Run a system command after the response has been flushed to the client."""
+        time.sleep(SYSTEM_ACTION_DELAY_SECONDS)
+        try:
+            subprocess.run(command, check=False, timeout=timeout)
+        except Exception as exc:
+            logging.error("Command execution error for %s: %s", command[0], exc)
+
     def end_headers(self):
         """Add CORS headers to all responses"""
-        self.send_header('Access-Control-Allow-Origin', '*')
+        allowed_origin = self._get_allowed_ui_origin()
+        if allowed_origin:
+            self.send_header('Access-Control-Allow-Origin', allowed_origin)
+            self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         super().end_headers()
@@ -382,48 +458,39 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def handle_system_restart(self):
         """Handle POST /system/restart — restart all TurboPi systemd services."""
+        if not self._require_ui_origin():
+            return
+
         self.send_response(202)
-        self.send_header('Content-Type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps({'status': 'restart_initiated'}).encode())
         logging.info("Service restart requested via API")
 
-        def _do_restart():
-            import subprocess
-            import time
-            time.sleep(0.5)
-            try:
-                subprocess.run(
-                    ['systemctl', 'restart',
-                     'turbopi-api', 'turbopi-ui', 'turbopi-updater',
-                     'turbopi-wake-word'],
-                    check=False,
-                    timeout=30
-                )
-            except Exception as exc:
-                logging.error("Service restart error: %s", exc)
-
-        t = threading.Thread(target=_do_restart, daemon=True)
+        t = threading.Thread(
+            target=self._run_delayed_command,
+            args=(
+                ['systemctl', 'try-restart',
+                 'turbopi-api', 'turbopi-ui', 'turbopi-updater',
+                 'turbopi-wake-word'],
+                30,
+            ),
+            daemon=True,
+        )
         t.start()
 
     def handle_system_reboot(self):
         """Handle POST /system/reboot — reboot the Raspberry Pi."""
+        if not self._require_ui_origin():
+            return
+
         self.send_response(202)
-        self.send_header('Content-Type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps({'status': 'reboot_initiated'}).encode())
         logging.info("System reboot requested via API")
 
-        def _do_reboot():
-            import subprocess
-            import time
-            time.sleep(0.5)
-            try:
-                subprocess.run(['reboot'], check=False, timeout=10)
-            except Exception as exc:
-                logging.error("Reboot error: %s", exc)
-
-        t = threading.Thread(target=_do_reboot, daemon=True)
+        t = threading.Thread(
+            target=self._run_delayed_command,
+            args=(['reboot'], 10),
+            daemon=True,
+        )
         t.start()
 
     def handle_updates_check(self):
@@ -459,6 +526,9 @@ class APIHandler(BaseHTTPRequestHandler):
     def handle_updates_apply(self):
         """Handle /updates/apply endpoint"""
         try:
+            if not self._require_ui_origin():
+                return
+
             current_version = get_current_version()
             
             # Fetch latest stable release with checksum
