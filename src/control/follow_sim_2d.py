@@ -106,8 +106,10 @@ def run_follow_simulation_2d(
 
     pose = initial_pose
     history: List[SimulationStep] = []
+    previous_t_s: float | None = None
 
     for point in points:
+        step_dt_s = dt_s if previous_t_s is None else max(0.0, point.t_s - previous_t_s)
         observation = _target_observation_from_world(
             target_id=target_id,
             now_s=point.t_s,
@@ -126,10 +128,11 @@ def run_follow_simulation_2d(
         linear_mps = command.linear_mps if command is not None else 0.0
         angular_rps = command.angular_rps if command is not None else 0.0
 
-        yaw = pose.yaw_rad + (angular_rps * dt_s)
-        x = pose.x_m + (linear_mps * math.cos(yaw) * dt_s)
-        y = pose.y_m + (linear_mps * math.sin(yaw) * dt_s)
+        yaw = pose.yaw_rad + (angular_rps * step_dt_s)
+        x = pose.x_m + (linear_mps * math.cos(yaw) * step_dt_s)
+        y = pose.y_m + (linear_mps * math.sin(yaw) * step_dt_s)
         pose = Pose2D(x_m=x, y_m=y, yaw_rad=yaw)
+        previous_t_s = point.t_s
 
         history.append(
             SimulationStep(
