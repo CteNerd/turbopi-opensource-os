@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Integration tests for /updates/config endpoint."""
+
+import json
+import os
+import sys
+import tempfile
+import threading
+import time
+import unittest
+import urllib.error
+import urllib.request
+from http.server import HTTPServer
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+from main import APIHandler
+
+
+class TestUpdateConfigAPI(unittest.TestCase):
+    """Tests for update configuration API."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp_dir = tempfile.TemporaryDirectory()
+        cls._config_path = os.path.join(cls._tmp_dir.name, 'config.env')
+        with open(cls._config_path, 'w', encoding='utf-8') as handle:
+            handle.write('ROBOT_NAME=TestBot\n')
+
+        os.environ['API_HOST'] = 'localhost'
+        os.environ['API_PORT'] = '18087'
+        os.environ['CONFIG_ENV_PATH'] = cls._config_path
+        os.environ['AUTO_UPDATE'] = 'false'
+        os.environ['AUTO_UPDATE_CHANNEL'] = 'stable'
+        os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = '03:00'
+
+        cls.server = HTTPServer(('localhost', 18087), APIHandler)
+        cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.server_thread.start()
+        time.sleep(0.5)
+        cls.base_url = 'http://localhost:18087'
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server_thread.join(timeout=5)
+        cls._tmp_dir.cleanup()
+
+    def _make_request(self, path, method='GET', data=None, origin=None):
+        url = f"{self.base_url}{path}"
+        body = None
+        if data is not None:
+            body = json.dumps(data).encode('utf-8')
+
+        request = urllib.request.Request(url, data=body, method=method)
+        if body is not None:
+            request.add_header('Content-Type', 'application/json')
+        if origin:
+            request.add_header('Origin', origin)
+
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                payload = response.read().decode('utf-8')
+                return response.status, json.loads(payload) if payload else {}
+        except urllib.error.HTTPError as exc:
+            payload = exc.read().decode('utf-8')
+            try:
+                return exc.code, json.loads(payload) if payload else {}
+            except json.JSONDecodeError:
+                return exc.code, {}
+
+    def test_get_update_config_defaults(self):
+        status, data = self._make_request('/updates/config')
+        self.assertEqual(status, 200)
+        self.assertFalse(data['auto_update'])
+        self.assertEqual(data['channel'], 'stable')
+        self.assertEqual(data['schedule_utc'], '03:00')
+
+    def test_post_update_config_requires_origin(self):
+        status, data = self._make_request(
+            '/updates/config',
+            method='POST',
+            data={'auto_update': True},
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(data.get('error'), 'forbidden')
+
+    def test_post_update_config_success_and_persistence(self):
+        status, data = self._make_request(
+            '/updates/config',
+            method='POST',
+            data={
+                'auto_update': True,
+                'channel': 'stable',
+                'schedule_utc': '02:15',
+            },
+            origin='http://localhost:8081',
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(data['auto_update'])
+        self.assertEqual(data['channel'], 'stable')
+        self.assertEqual(data['schedule_utc'], '02:15')
+        self.assertTrue(data['persisted'])
+
+        with open(self.__class__._config_path, 'r', encoding='utf-8') as handle:
+            content = handle.read()
+
+        self.assertIn('AUTO_UPDATE=true', content)
+        self.assertIn('AUTO_UPDATE_CHANNEL=stable', content)
+        self.assertIn('AUTO_UPDATE_SCHEDULE_UTC=02:15', content)
+
+    def test_post_update_config_rejects_non_stable_channel(self):
+        status, data = self._make_request(
+            '/updates/config',
+            method='POST',
+            data={'channel': 'beta'},
+            origin='http://localhost:8081',
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(data.get('error'), 'bad_request')
+
+    def test_post_update_config_rejects_invalid_schedule(self):
+        status, data = self._make_request(
+            '/updates/config',
+            method='POST',
+            data={'schedule_utc': '24:00'},
+            origin='http://localhost:8081',
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(data.get('error'), 'bad_request')
+
+
+if __name__ == '__main__':
+    unittest.main()

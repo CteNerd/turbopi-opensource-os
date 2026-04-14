@@ -190,6 +190,79 @@ paths:
                 type: string
                 description: HTML error page
 
+  /updates/config:
+    get:
+      summary: Get automatic update configuration
+      responses:
+        '200':
+          description: Current automatic update settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auto_update: { type: boolean, default: false }
+                  channel:
+                    type: string
+                    enum: [stable]
+                    default: stable
+                  schedule_utc:
+                    type: string
+                    pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$'
+                    example: '03:00'
+    post:
+      summary: Update automatic update configuration
+      description: >
+        Development prototype endpoint for trusted local-network use.
+        This endpoint currently relies on same-host UI origin checks and does
+        not yet implement full authentication or authorization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auto_update: { type: boolean }
+                channel:
+                  type: string
+                  enum: [stable]
+                schedule_utc:
+                  type: string
+                  pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$'
+      responses:
+        '200':
+          description: Update settings applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auto_update: { type: boolean }
+                  channel:
+                    type: string
+                    enum: [stable]
+                  schedule_utc: { type: string }
+                  persisted: { type: boolean }
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: bad_request }
+                  message: { type: string }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: forbidden }
+                  message: { type: string }
+
   /network/wifi/status:
     get:
       summary: Get Wi-Fi connection status

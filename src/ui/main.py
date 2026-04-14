@@ -252,6 +252,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <button class="button" id="updateNowBtn" onclick="applyUpdate()" disabled>Update Now</button>
             </div>
 
+            <div class="form-group" style="margin-top:16px;">
+                <label>
+                    <input type="checkbox" id="autoUpdateEnabled">
+                    <span class="checkbox-label">Enable automatic updates</span>
+                </label>
+                <p class="info">Automatic updates are opt-in and only install promoted stable releases.</p>
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+                    <label for="updateChannel">Channel</label>
+                    <select id="updateChannel">
+                        <option value="stable">Stable (recommended)</option>
+                    </select>
+                    <label for="autoUpdateSchedule">Daily UTC Time</label>
+                    <input type="time" id="autoUpdateSchedule" value="03:00" step="60">
+                    <button class="button button-secondary" onclick="saveUpdateConfig()">Save Auto-Update Settings</button>
+                </div>
+            </div>
+
             <hr style="margin:20px 0; border:none; border-top:1px solid #e0e0e0;">
 
             <h3 style="color:#444; margin-bottom:10px;">System Control</h3>
@@ -920,6 +937,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
         }}
 
+        async function loadUpdateConfig() {{
+            try {{
+                const response = await fetch(API_BASE + '/updates/config');
+                if (!response.ok) throw new Error('Failed to load update settings');
+                const data = await response.json();
+                document.getElementById('autoUpdateEnabled').checked = !!data.auto_update;
+                document.getElementById('updateChannel').value = (data.channel || 'stable');
+                document.getElementById('autoUpdateSchedule').value = (data.schedule_utc || '03:00');
+            }} catch (error) {{
+                showUpdateAlert('Could not load update settings: ' + error.message, 'error');
+            }}
+        }}
+
+        async function saveUpdateConfig() {{
+            const payload = {{
+                auto_update: document.getElementById('autoUpdateEnabled').checked,
+                channel: document.getElementById('updateChannel').value,
+                schedule_utc: document.getElementById('autoUpdateSchedule').value
+            }};
+
+            try {{
+                const response = await fetch(API_BASE + '/updates/config', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(payload)
+                }});
+                const data = await parseApiPayload(response);
+                if (!response.ok) {{
+                    throw new Error(data.message || data.error || 'Failed to save update settings');
+                }}
+                showUpdateAlert('Auto-update settings saved.', 'success');
+                await loadUpdateConfig();
+            }} catch (error) {{
+                showUpdateAlert('Could not save update settings: ' + error.message, 'error');
+            }}
+        }}
+
         async function checkForUpdates() {{
             const btn = document.getElementById('checkUpdatesBtn');
             btn.disabled = true;
@@ -1024,6 +1078,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             updateTtsVolume();
             updateTtsMute();
             loadVersionInfo();
+            loadUpdateConfig();
             connectControlSocket();
             setupJoystick();
             setupVideoPanel();

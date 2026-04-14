@@ -78,6 +78,7 @@ FALLBACK_JPEG_BYTES = base64.b64decode(
 
 _SERVICE_STATE_CACHE = {'timestamp': 0.0, 'states': {}}
 _SERVICE_STATE_CACHE_LOCK = threading.Lock()
+_SCHEDULE_HHMM_RE = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 _CONVERSATION_GUARDRAIL_PATTERNS = (
     r'\bestop\b',
     r'\bemergency\s+stop\b',
@@ -189,6 +190,93 @@ def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) 
         replacements['WAKE_WORD'] = wake_word
     if enabled is not None:
         replacements['WAKE_WORD_ENABLED'] = 'true' if enabled else 'false'
+
+    if not replacements:
+        return True
+
+    seen = set()
+    updated_lines = []
+    for line in existing_lines:
+        if '=' not in line or line.lstrip().startswith('#'):
+            updated_lines.append(line)
+            continue
+
+        key, _sep, _value = line.partition('=')
+        clean_key = key.strip()
+        if clean_key in replacements:
+            updated_lines.append(f'{clean_key}={replacements[clean_key]}\n')
+            seen.add(clean_key)
+        else:
+            updated_lines.append(line)
+
+    for key, value in replacements.items():
+        if key not in seen:
+            updated_lines.append(f'{key}={value}\n')
+
+    try:
+        config_dir = os.path.dirname(config_path)
+        if config_dir:
+            os.makedirs(config_dir, exist_ok=True)
+        tmp_path = f'{config_path}.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as handle:
+            handle.writelines(updated_lines)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, config_path)
+        return True
+    except Exception:
+        return False
+
+
+def _validated_update_channel(raw: Optional[str]) -> str:
+    channel = (raw or 'stable').strip().lower()
+    if channel != 'stable':
+        return 'stable'
+    return channel
+
+
+def _validated_update_schedule_utc(raw: Optional[str]) -> str:
+    candidate = (raw or '03:00').strip()
+    if _SCHEDULE_HHMM_RE.match(candidate):
+        return candidate
+    return '03:00'
+
+
+def get_update_config() -> Dict[str, object]:
+    """Return runtime update configuration with safe defaults."""
+    auto_update = os.environ.get('AUTO_UPDATE', 'false').strip().lower() == 'true'
+    channel = _validated_update_channel(os.environ.get('AUTO_UPDATE_CHANNEL', 'stable'))
+    schedule_utc = _validated_update_schedule_utc(os.environ.get('AUTO_UPDATE_SCHEDULE_UTC', '03:00'))
+    return {
+        'auto_update': auto_update,
+        'channel': channel,
+        'schedule_utc': schedule_utc,
+    }
+
+
+def persist_update_config(
+    *,
+    auto_update: Optional[bool] = None,
+    channel: Optional[str] = None,
+    schedule_utc: Optional[str] = None,
+) -> bool:
+    """Persist update settings to config.env while preserving unrelated keys."""
+    config_path = os.environ.get('CONFIG_ENV_PATH', '/etc/turbopi/config.env')
+    existing_lines = []
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as handle:
+                existing_lines = handle.readlines()
+        except Exception:
+            return False
+
+    replacements = {}
+    if auto_update is not None:
+        replacements['AUTO_UPDATE'] = 'true' if auto_update else 'false'
+    if channel is not None:
+        replacements['AUTO_UPDATE_CHANNEL'] = channel
+    if schedule_utc is not None:
+        replacements['AUTO_UPDATE_SCHEDULE_UTC'] = schedule_utc
 
     if not replacements:
         return True
@@ -837,6 +925,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_system_version()
         elif path == '/updates/check':
             self.handle_updates_check()
+        elif path == '/updates/config':
+            self.handle_updates_config_get()
         elif path == '/video/stream':
             self.handle_video_stream(parsed.query)
         elif path == '/video/stats':
@@ -854,6 +944,8 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle POST requests"""
         if self.path == '/updates/apply':
             self.handle_updates_apply()
+        elif self.path == '/updates/config':
+            self.handle_updates_config_update()
         elif self.path == '/control/arm':
             self.handle_control_arm()
         elif self.path == '/control/disarm':
@@ -1010,6 +1102,99 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"Updates check endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to check for updates")
+
+    def handle_updates_config_get(self):
+        """Handle GET /updates/config endpoint."""
+        self._send_json_response(200, get_update_config())
+
+    def handle_updates_config_update(self):
+        """Handle POST /updates/config endpoint."""
+        if not self._require_ui_origin():
+            return
+
+        content_length_header = self.headers.get('Content-Length')
+        if content_length_header is None:
+            content_length = 0
+        else:
+            try:
+                content_length = int(content_length_header)
+            except (TypeError, ValueError):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Invalid Content-Length header: must be an integer',
+                })
+                return
+
+        if content_length <= 0:
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'Request body is required',
+            })
+            return
+
+        try:
+            payload = json.loads(self.rfile.read(content_length).decode('utf-8'))
+        except json.JSONDecodeError:
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'Invalid JSON in request body',
+            })
+            return
+
+        if not any(key in payload for key in ('auto_update', 'channel', 'schedule_utc')):
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'At least one of auto_update, channel, or schedule_utc is required',
+            })
+            return
+
+        auto_update_value = None
+        if 'auto_update' in payload:
+            if not isinstance(payload['auto_update'], bool):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'auto_update must be a boolean',
+                })
+                return
+            auto_update_value = payload['auto_update']
+
+        channel_value = None
+        if 'channel' in payload:
+            channel = str(payload['channel']).strip().lower()
+            if channel != 'stable':
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Only stable channel is allowed',
+                })
+                return
+            channel_value = channel
+
+        schedule_value = None
+        if 'schedule_utc' in payload:
+            schedule = str(payload['schedule_utc']).strip()
+            if not _SCHEDULE_HHMM_RE.match(schedule):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'schedule_utc must be in HH:MM 24-hour format (UTC)',
+                })
+                return
+            schedule_value = schedule
+
+        if auto_update_value is not None:
+            os.environ['AUTO_UPDATE'] = 'true' if auto_update_value else 'false'
+        if channel_value is not None:
+            os.environ['AUTO_UPDATE_CHANNEL'] = channel_value
+        if schedule_value is not None:
+            os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = schedule_value
+
+        persisted = persist_update_config(
+            auto_update=auto_update_value,
+            channel=channel_value,
+            schedule_utc=schedule_value,
+        )
+        response = get_update_config()
+        response['persisted'] = persisted
+        self._send_json_response(200, response)
 
     def handle_control_arm(self):
         """Handle POST /control/arm endpoint."""
