@@ -100,6 +100,8 @@ Field-hardening controls:
 - `HAL_MOTOR_DISABLED_CHANNELS` can disable known-bad channels (example `3`)
 - `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` fail-safes by rejecting non-zero
    motion commands that would energize a disabled channel
+- `HAL_MOTOR_CHANNEL_SCALE_1..4` provides optional per-wheel tuning multipliers
+   for minor variance after bench validation
 
 Control diagnostics now expose motor runtime status at `/control/state`:
 

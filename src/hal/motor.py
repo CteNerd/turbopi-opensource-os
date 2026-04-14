@@ -243,6 +243,12 @@ class HiwonderTurboPiMotorHAL(BaseMotorHAL):
             if block_on_disabled_channels is not None
             else _get_bool('HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS', True)
         )
+        self.channel_scale = {
+            1: _clamp(_get_float('HAL_MOTOR_CHANNEL_SCALE_1', 1.0), 0.0, 2.0),
+            2: _clamp(_get_float('HAL_MOTOR_CHANNEL_SCALE_2', 1.0), 0.0, 2.0),
+            3: _clamp(_get_float('HAL_MOTOR_CHANNEL_SCALE_3', 1.0), 0.0, 2.0),
+            4: _clamp(_get_float('HAL_MOTOR_CHANNEL_SCALE_4', 1.0), 0.0, 2.0),
+        }
         self.applied_channel_outputs: List[List[int]] = []
 
     def _build_vendor_board(self):
@@ -275,6 +281,9 @@ class HiwonderTurboPiMotorHAL(BaseMotorHAL):
             3: int(round((-left_output) * self.max_duty)),
             4: int(round(right_output * self.max_duty)),
         }
+        for channel in (1, 2, 3, 4):
+            scaled = int(round(duty_by_channel[channel] * self.channel_scale[channel]))
+            duty_by_channel[channel] = max(-100, min(100, scaled))
 
         unhealthy_channels = sorted(
             ch for ch in self._disabled_channels if abs(duty_by_channel.get(ch, 0)) > 0

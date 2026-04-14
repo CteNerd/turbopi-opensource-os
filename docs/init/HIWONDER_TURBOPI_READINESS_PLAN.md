@@ -51,8 +51,8 @@ robot bring-up safely.
     - `4`: non-inverted (`v4`)
 - Motor probe on physical robot (wheels lifted, low duty) indicated:
   - Channels `1`, `2`, `4` respond
-  - Channel `3` produced stuck/noise behavior and did not spin normally
-  - This is a hardware-path blocker (channel, cable, or motor) and must be isolated before full motion validation
+  - Channel `3` initially produced stuck/noise behavior and did not spin normally
+  - Follow-up isolation indicates issue is localized to the rear-left wheel path (wheel starts after light tap), not a global drive-stack failure
 
 ### Expansion board capabilities (verified from vendor PDF)
 
@@ -100,6 +100,8 @@ robot bring-up safely.
 - Added hardening control for unhealthy channels:
   - `HAL_MOTOR_DISABLED_CHANNELS` (for example `3`)
   - `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` to fail safe on degraded path
+- Added optional per-channel scaling for hardening/tuning:
+  - `HAL_MOTOR_CHANNEL_SCALE_1..4`
 - Added strict vendor backend startup option:
   - `HAL_MOTOR_VENDOR_REQUIRED=true` fails startup when vendor backend is unavailable
 - Control arbiter now constructs motor HAL through config-driven factory (no bypass of arbiter/HAL contract).
@@ -112,11 +114,11 @@ robot bring-up safely.
 
 The following are required before safe production deployment on physical hardware:
 
-1. Hardware fault isolation for motor path expected on channel `3` (determine board-channel fault vs cable/motor fault).
-2. Final physical confirmation of channel-to-wheel mapping and direction sign on this assembled unit after channel `3` is healthy.
-3. Servo channel-to-joint assignment (`servo1` vs `servo2` to pan/tilt) and safe bounds for this build.
-4. Complete board pinout/address map for I2C/GPIO/PWM/bus-servo interfaces.
-5. Confirmed vendor-side fail-safe expectations (disconnect/watchdog behavior if any).
+1. Final physical confirmation of channel-to-wheel mapping and direction sign on this assembled unit under floor-load conditions.
+2. Servo channel-to-joint assignment (`servo1` vs `servo2` to pan/tilt) and safe bounds for this build.
+3. Complete board pinout/address map for I2C/GPIO/PWM/bus-servo interfaces.
+4. Confirmed vendor-side fail-safe expectations (disconnect/watchdog behavior if any).
+5. Hardening pass for rear-left wheel stiction/variance (mechanical check plus optional `HAL_MOTOR_CHANNEL_SCALE_3` tuning if required).
 
 ## Staged Completion Plan
 
@@ -179,6 +181,11 @@ Exit criteria:
 3. Start Phase 1 coding with a hardware adapter that uses the vendor-proven channel/sign convention and keeps disarmed startup.
 4. Gate hardware activation behind config and keep simulation fallback path intact.
 5. Run safety regression tests focused on estop/deadman/disconnect before any floor motion tests.
+
+Status update:
+
+- Software integration work is complete for staged bring-up through hardware-backed motor HAL and safety integration.
+- Remaining completion risk is now narrowed to physical hardening/tuning of the rear-left wheel path under load.
 
 ## CH3 Hardening Note
 

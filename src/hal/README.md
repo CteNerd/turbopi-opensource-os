@@ -44,10 +44,18 @@ Motor calibration keys:
 - `HAL_MOTOR_MAX_DUTY`
 - `HAL_MOTOR_DISABLED_CHANNELS`
 - `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS`
+- `HAL_MOTOR_CHANNEL_SCALE_1`
+- `HAL_MOTOR_CHANNEL_SCALE_2`
+- `HAL_MOTOR_CHANNEL_SCALE_3`
+- `HAL_MOTOR_CHANNEL_SCALE_4`
 
 For field hardening scenarios (for example, an unhealthy CH3 path), set
 `HAL_MOTOR_DISABLED_CHANNELS=3` and keep
 `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` to prevent unsafe degraded motion.
+
+For minor wheel variance or stiction tuning after hardware checks, use
+`HAL_MOTOR_CHANNEL_SCALE_*` to apply per-channel multipliers without bypassing
+the arbiter/HAL safety contract.
 
 Camera calibration keys:
 - `HAL_CAMERA_WIDTH`

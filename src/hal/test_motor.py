@@ -146,6 +146,16 @@ class TestMotorCalibration(unittest.TestCase):
                 with self.assertRaises(MotorSafetyError):
                     create_motor_hal_from_env()
 
+    def test_vendor_hal_applies_per_channel_scale(self):
+        board = FakeBoard()
+        with patch.dict(os.environ, {'HAL_MOTOR_CHANNEL_SCALE_3': '1.2'}, clear=False):
+            hal = HiwonderTurboPiMotorHAL(board=board, max_duty=30)
+        hal.arm()
+
+        hal.set_velocity(VelocityCommand(linear_mps=0.3, angular_rps=0.0))
+        # CH3 receives an increased absolute duty for weak/sticky wheel hardening.
+        self.assertEqual(board.calls[-1], [[1, -18], [2, 18], [3, -22], [4, 18]])
+
 
 if __name__ == '__main__':
     unittest.main()
