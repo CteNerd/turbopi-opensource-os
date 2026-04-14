@@ -437,6 +437,144 @@ paths:
                   max_linear_speed: { type: number }
                   max_angular_speed: { type: number }
 
+  /control/follow/start:
+    post:
+      summary: Start follow behavior
+      description: Enables autonomous follow behavior for an optional target id selected by UI.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Follow behavior started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "started" }
+                  target_id:
+                    type: integer
+                    nullable: true
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "bad_request" }
+                  message: { type: string }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
+
+  /control/follow/stop:
+    post:
+      summary: Stop follow behavior
+      description: Disables follow behavior and forces zero motion output.
+      responses:
+        '200':
+          description: Follow behavior stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "stopped" }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
+
+  /control/follow/state:
+    get:
+      summary: Get follow behavior state
+      responses:
+        '200':
+          description: Current follow behavior state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  target_id:
+                    type: integer
+                    nullable: true
+                  lost_target: { type: boolean }
+                  linear_mps: { type: number }
+                  angular_rps: { type: number }
+
+  /control/follow/observation:
+    post:
+      summary: Submit target observation for follow control
+      description: Supplies latest selected-target observation from vision runtime/UI selection layer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_id, center_x, area]
+              properties:
+                target_id:
+                  type: integer
+                  minimum: 1
+                center_x:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                area:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+      responses:
+        '200':
+          description: Observation accepted or ignored (target mismatch)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [accepted, ignored] }
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "bad_request" }
+                  message: { type: string }
+        '403':
+          description: Request origin is not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "forbidden" }
+                  message: { type: string }
+
   /video/stream:
     get:
       summary: MJPEG live camera stream

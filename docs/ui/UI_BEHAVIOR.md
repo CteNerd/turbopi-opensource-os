@@ -25,6 +25,9 @@
 - Disarm button calls POST /control/disarm
 - E-Stop button calls POST /control/estop
 - Reset E-Stop button calls POST /control/estop/reset
+- Start Follow button calls POST /control/follow/start with optional target_id
+- Stop Follow button calls POST /control/follow/stop
+- UI polls GET /control/follow/state to display follow enabled/lost-target state
 - Joystick uses WebSocket control channel (/ws/control)
 - Joystick release sends stop command
 - WebSocket disconnect or heartbeat timeout must stop motion immediately
