@@ -19,6 +19,12 @@
 - Camera frames
 - E-Stop latch
 
+## Implemented Suites
+
+- Vision replay pipeline tests: `src/vision/test_replay_pipeline.py`
+- Voice command replay tests: `src/voice/test_replay_command_intent.py`
+- 2D follow behavior simulation tests: `src/control/test_follow_sim_2d.py`
+
 ## CI Rules
 - Tests required for merge
 - Releases manual

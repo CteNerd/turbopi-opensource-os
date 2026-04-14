@@ -73,6 +73,7 @@ class CommandIntentParser:
         CommandType.FOLLOW: [
             r'\bfollow\s+(?:the\s+)?(\w+)',  # "follow the person", "follow me"
             r'\bstart\s+following\s+(?:the\s+)?(\w+)',  # "start following person"
+            r'\b(?:keep\s+)?following\s+(?:the\s+)?(\w+)',  # "keep following the person"
         ],
     }
     
