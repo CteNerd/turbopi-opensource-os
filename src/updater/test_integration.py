@@ -24,6 +24,8 @@ class TestUpdaterServiceDownload(unittest.TestCase):
         self.original_env = {
             'ROBOT_NAME': os.environ.get('ROBOT_NAME'),
             'AUTO_UPDATE': os.environ.get('AUTO_UPDATE'),
+            'AUTO_UPDATE_CHANNEL': os.environ.get('AUTO_UPDATE_CHANNEL'),
+            'AUTO_UPDATE_SCHEDULE_UTC': os.environ.get('AUTO_UPDATE_SCHEDULE_UTC'),
             'DOWNLOAD_DIR': os.environ.get('DOWNLOAD_DIR'),
             'LOG_LEVEL': os.environ.get('LOG_LEVEL')
         }
@@ -31,6 +33,8 @@ class TestUpdaterServiceDownload(unittest.TestCase):
         # Set environment variables
         os.environ['ROBOT_NAME'] = 'TestBot'
         os.environ['AUTO_UPDATE'] = 'false'
+        os.environ['AUTO_UPDATE_CHANNEL'] = 'stable'
+        os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = '03:00'
         os.environ['DOWNLOAD_DIR'] = self.temp_dir
         os.environ['LOG_LEVEL'] = 'INFO'
     
@@ -119,6 +123,8 @@ class TestUpdaterServiceInitialization(unittest.TestCase):
         self.original_env = {
             'ROBOT_NAME': os.environ.get('ROBOT_NAME'),
             'AUTO_UPDATE': os.environ.get('AUTO_UPDATE'),
+            'AUTO_UPDATE_CHANNEL': os.environ.get('AUTO_UPDATE_CHANNEL'),
+            'AUTO_UPDATE_SCHEDULE_UTC': os.environ.get('AUTO_UPDATE_SCHEDULE_UTC'),
             'DOWNLOAD_DIR': os.environ.get('DOWNLOAD_DIR')
         }
     
@@ -135,12 +141,16 @@ class TestUpdaterServiceInitialization(unittest.TestCase):
         """Test that service initializes with correct configuration"""
         os.environ['ROBOT_NAME'] = 'TestBot'
         os.environ['AUTO_UPDATE'] = 'false'
+        os.environ['AUTO_UPDATE_CHANNEL'] = 'stable'
+        os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = '04:30'
         os.environ['DOWNLOAD_DIR'] = '/tmp/test'
         
         service = UpdaterService()
         
         self.assertEqual(service.robot_name, 'TestBot')
         self.assertFalse(service.auto_update)
+        self.assertEqual(service.auto_update_channel, 'stable')
+        self.assertEqual(service.auto_update_schedule_utc, '04:30')
         self.assertEqual(service.download_dir, '/tmp/test')
         self.assertTrue(service.running)
     
@@ -149,13 +159,27 @@ class TestUpdaterServiceInitialization(unittest.TestCase):
         # Clear environment variables
         os.environ.pop('ROBOT_NAME', None)
         os.environ.pop('AUTO_UPDATE', None)
+        os.environ.pop('AUTO_UPDATE_CHANNEL', None)
+        os.environ.pop('AUTO_UPDATE_SCHEDULE_UTC', None)
         os.environ.pop('DOWNLOAD_DIR', None)
         
         service = UpdaterService()
         
         self.assertEqual(service.robot_name, 'TurboPi')
         self.assertFalse(service.auto_update)
+        self.assertEqual(service.auto_update_channel, 'stable')
+        self.assertEqual(service.auto_update_schedule_utc, '03:00')
         self.assertEqual(service.download_dir, '/opt/turbopi/downloads')
+
+    def test_service_invalid_channel_and_schedule_fall_back(self):
+        """Test invalid channel/schedule values safely fall back to stable defaults."""
+        os.environ['AUTO_UPDATE_CHANNEL'] = 'beta'
+        os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = '99:99'
+
+        service = UpdaterService()
+
+        self.assertEqual(service.auto_update_channel, 'stable')
+        self.assertEqual(service.auto_update_schedule_utc, '03:00')
 
 
 if __name__ == '__main__':

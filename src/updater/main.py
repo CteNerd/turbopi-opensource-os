@@ -15,6 +15,7 @@ import time
 import signal
 import logging
 import json
+import re
 
 # Import download and verification functionality
 try:
@@ -37,6 +38,12 @@ class UpdaterService:
         self.running = True
         self.robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
         self.auto_update = os.environ.get('AUTO_UPDATE', 'false').lower() == 'true'
+        self.auto_update_channel = self._validate_auto_update_channel(
+            os.environ.get('AUTO_UPDATE_CHANNEL', 'stable')
+        )
+        self.auto_update_schedule_utc = self._validate_schedule_utc(
+            os.environ.get('AUTO_UPDATE_SCHEDULE_UTC', '03:00')
+        )
         self.download_dir = os.environ.get('DOWNLOAD_DIR', '/opt/turbopi/downloads')
         self.trigger_dir = os.environ.get('TRIGGER_DIR', '/var/lib/turbopi')
         self.trigger_file = os.path.join(self.trigger_dir, 'update-trigger.json')
@@ -57,6 +64,28 @@ class UpdaterService:
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
         signal.signal(signal.SIGINT, self.handle_shutdown)
+
+    @staticmethod
+    def _validate_auto_update_channel(channel_raw: str) -> str:
+        channel = (channel_raw or 'stable').strip().lower()
+        if channel != 'stable':
+            logging.warning(
+                "Invalid AUTO_UPDATE_CHANNEL '%s'; only 'stable' is supported. Falling back to 'stable'.",
+                channel_raw,
+            )
+            return 'stable'
+        return channel
+
+    @staticmethod
+    def _validate_schedule_utc(schedule_raw: str) -> str:
+        schedule = (schedule_raw or '03:00').strip()
+        if re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', schedule):
+            return schedule
+        logging.warning(
+            "Invalid AUTO_UPDATE_SCHEDULE_UTC '%s'; expected HH:MM 24-hour UTC. Falling back to 03:00.",
+            schedule_raw,
+        )
+        return '03:00'
 
     def handle_shutdown(self, signum, frame):
         """Handle shutdown signals gracefully"""
@@ -262,6 +291,8 @@ class UpdaterService:
         logging.info(f"TurboPi Updater Service starting...")
         logging.info(f"Robot Name: {self.robot_name}")
         logging.info(f"Auto Update: {self.auto_update}")
+        logging.info(f"Auto Update Channel: {self.auto_update_channel}")
+        logging.info(f"Auto Update Schedule (UTC): {self.auto_update_schedule_utc}")
         logging.info(f"Poll Interval: {self.poll_interval}s")
         logging.info(f"Service running in background mode...")
         logging.info(f"Updater service: READY - waiting for update requests")
