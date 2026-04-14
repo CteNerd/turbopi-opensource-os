@@ -103,6 +103,9 @@ Field-hardening controls:
 - `HAL_MOTOR_CHANNEL_SCALE_1..4` provides optional per-wheel tuning multipliers
    for minor variance after bench validation
 
+Use `system/motor_channel_tune.py` on the robot for interactive breakaway-duty
+tuning and optional config write-back to `/etc/turbopi/config.env`.
+
 Control diagnostics now expose motor runtime status at `/control/state`:
 
 - `motor_backend`
