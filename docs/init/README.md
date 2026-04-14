@@ -22,6 +22,6 @@ autonomy, vision, and voice interaction.
 - Voice interaction with wake-word support ("Jarvis")
 - Extensible architecture with a future ROS 2 migration path
 
-See `/docs/ARCHITECTURE.md` for system design.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for system design.
 
-For ROS 2 adoption sequencing and boundaries, see `docs/init/ROS2_MIGRATION_RUNWAY.md`.
+For ROS 2 adoption sequencing and boundaries, see [ROS2_MIGRATION_RUNWAY.md](./ROS2_MIGRATION_RUNWAY.md).

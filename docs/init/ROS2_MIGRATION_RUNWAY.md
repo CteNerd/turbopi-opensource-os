@@ -54,7 +54,7 @@ Current contract:
 - Detection/tracking/target-selection feed follow behavior inputs.
 
 ROS 2 boundary:
-- Vision runtime can become ROS publishers, but output schema must map to existing target observation semantics (`target_id`, `center_x`, `area`, timestamp).
+- Vision runtime can become ROS publishers, but output schema must map to existing target observation semantics (`target_id`, `center_x`, `area`, `timestamp`).
 - Follow behavior logic stays deterministic and testable outside ROS.
 
 ### 5) Voice Boundary
