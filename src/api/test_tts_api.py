@@ -32,6 +32,7 @@ class TestTTSEndpoint(unittest.TestCase):
         os.environ['API_HOST'] = 'localhost'
         os.environ['API_PORT'] = '18086'
         os.environ['OPENAI_API_KEY'] = 'test-key-123'
+        os.environ['UI_PORT'] = '8081'
 
         APIHandler._tts_provider = _FakeTTSProvider()
 
@@ -46,13 +47,15 @@ class TestTTSEndpoint(unittest.TestCase):
         cls.server.shutdown()
         cls.server_thread.join(timeout=5)
 
-    def _post_json(self, path, payload):
+    def _post_json(self, path, payload, with_origin=True):
         req = urllib.request.Request(
             f'{self.base_url}{path}',
             data=json.dumps(payload).encode('utf-8'),
             method='POST',
             headers={'Content-Type': 'application/json'},
         )
+        if with_origin:
+            req.add_header('Origin', 'http://localhost:8081')
         try:
             with urllib.request.urlopen(req, timeout=5) as response:
                 return response.status, response.headers, response.read()
@@ -73,11 +76,22 @@ class TestTTSEndpoint(unittest.TestCase):
         status, _headers, _body = self._post_json('/voice/tts', {'text': 'x' * 1001})
         self.assertEqual(status, 400)
 
+    def test_tts_oversized_payload_returns_413(self):
+        status, _headers, _body = self._post_json('/voice/tts', {'text': 'x' * 20000})
+        self.assertEqual(status, 413)
+
+    def test_tts_requires_ui_origin(self):
+        status, _headers, _body = self._post_json('/voice/tts', {'text': 'hello world'}, with_origin=False)
+        self.assertEqual(status, 403)
+
     def test_tts_provider_failure_returns_503(self):
+        original_provider = APIHandler._tts_provider
         APIHandler._tts_provider = _FakeTTSProvider(should_fail=True)
-        status, _headers, _body = self._post_json('/voice/tts', {'text': 'hello world'})
-        self.assertEqual(status, 503)
-        APIHandler._tts_provider = _FakeTTSProvider()
+        try:
+            status, _headers, _body = self._post_json('/voice/tts', {'text': 'hello world'})
+            self.assertEqual(status, 503)
+        finally:
+            APIHandler._tts_provider = original_provider
 
     def test_tts_endpoint_exists_post_only(self):
         req = urllib.request.Request(f'{self.base_url}/voice/tts', method='GET')

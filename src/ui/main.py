@@ -438,6 +438,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 return;
             }}
 
+            let audioUrl = null;
             try {{
                 const response = await fetch(API_BASE + '/voice/tts', {{
                     method: 'POST',
@@ -452,7 +453,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 }}
 
                 const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
+                audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
                 audio.volume = ttsVolume;
                 audio.muted = ttsMuted;
@@ -461,6 +462,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 await audio.play();
                 showAlert('Playing TTS preview', 'success');
             }} catch (error) {{
+                if (audioUrl) {{
+                    URL.revokeObjectURL(audioUrl);
+                }}
                 showAlert('TTS preview failed: ' + error.message, 'error');
             }}
         }}

@@ -1463,6 +1463,9 @@ class APIHandler(BaseHTTPRequestHandler):
     def handle_voice_tts(self):
         """Handle POST /voice/tts endpoint."""
         try:
+            if not self._require_ui_origin():
+                return
+
             provider = self.get_tts_provider()
             if provider is None:
                 self.send_error(503, "TTS service not configured")
@@ -1509,7 +1512,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 self.send_error(503, "TTS provider temporarily unavailable")
                 return
             except Exception as exc:
-                logging.error("Unexpected TTS provider error: %s", exc)
+                logging.exception("Unexpected TTS provider error: %s", exc)
                 self.send_error(503, "TTS provider temporarily unavailable")
                 return
 
