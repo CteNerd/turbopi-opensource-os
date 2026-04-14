@@ -23,6 +23,14 @@ Server-side STT endpoint that:
 - Returns JSON transcript
 - **Server-side API calls only** (no client-side API exposure)
 
+### Text-to-Speech (TTS)
+
+Provider abstraction and OpenAI-backed TTS synthesis:
+- `tts_provider.py` defines the provider contract and OpenAI implementation
+- `POST /voice/tts` synthesizes text to audio/mpeg
+- Requires `OPENAI_API_KEY` in `/etc/turbopi/config.env`
+- Designed for audible UI/system feedback only (no direct motor control path)
+
 ### Command Intent Parser (`command_intent.py`)
 
 Schema-based command parser that:
@@ -47,6 +55,9 @@ Voice functionality is integrated into the TurboPi API service with the followin
 
 **Command Parsing:**
 - `POST /voice/command` - Parse voice transcript into command intent for safety arbiter
+
+**Text-to-Speech:**
+- `POST /voice/tts` - Synthesize text to audio/mpeg for UI playback
 
 See `docs/api/OPENAPI.yaml` for full API specification.
 
@@ -76,6 +87,9 @@ WAKE_WORD_TIMEOUT=5           # Timeout in seconds after detection
 
 # STT Settings
 OPENAI_API_KEY=your-key-here  # Required for STT functionality
+
+# TTS Settings
+# Uses OPENAI_API_KEY via server-side requests
 ```
 
 ## Safety Guarantees
@@ -170,6 +184,12 @@ curl -X POST http://localhost:8080/voice/stt \
 curl -X POST http://localhost:8080/voice/command \
   -H "Content-Type: application/json" \
   -d '{"transcript": "follow the person"}'
+
+# Synthesize TTS audio
+curl -X POST http://localhost:8080/voice/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "System ready."}' \
+  -o speech.mp3
 ```
 
 ## Testing
