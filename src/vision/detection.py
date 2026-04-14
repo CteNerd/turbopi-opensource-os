@@ -9,9 +9,8 @@ any camera hardware or model binaries.
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 from hal.camera import CameraFrame
 
@@ -84,7 +83,6 @@ class DetectionEngine:
         # Initialise so the very first frame triggers detection.
         self._frame_count: int = interval_frames - 1
         self._last_detections: List[Detection] = []
-        self._last_detect_time: Optional[float] = None
 
     @property
     def last_detections(self) -> List[Detection]:
@@ -102,7 +100,6 @@ class DetectionEngine:
             self._last_detections = [
                 d for d in raw if d.confidence >= self._min_confidence
             ]
-            self._last_detect_time = time.monotonic()
             logger.debug(
                 "Detection ran on frame %d: %d result(s)",
                 self._frame_count,

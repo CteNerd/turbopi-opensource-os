@@ -8,7 +8,7 @@ across frames, with configurable lost-target eviction.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from vision.detection import Detection
@@ -50,7 +50,8 @@ class Tracker:
 
     Args:
         iou_threshold:   Minimum IoU to match a detection to an existing track.
-        max_missed:      Evict a track after it has been absent this many frames.
+        max_missed:      Maximum consecutive misses to retain a track.
+                         The track is evicted when missed_frames >= max_missed.
     """
 
     def __init__(self, iou_threshold: float = 0.3, max_missed: int = 5) -> None:
@@ -110,7 +111,7 @@ class Tracker:
             self._next_id += 1
 
         # Evict stale tracks.
-        stale = [tid for tid, t in self._tracks.items() if t.missed_frames > self._max_missed]
+        stale = [tid for tid, t in self._tracks.items() if t.missed_frames >= self._max_missed]
         for tid in stale:
             logger.debug("Track %d evicted (missed %d frames)", tid, self._tracks[tid].missed_frames)
             del self._tracks[tid]

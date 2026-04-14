@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from vision.detection import Detection
-from vision.tracker import Tracker, TrackedObject
+from vision.tracker import TrackedObject
 from vision.target_selector import TargetSelector
 
 
@@ -42,12 +42,56 @@ class TestTargetSelector(unittest.TestCase):
         self.assertTrue(selector.is_manual)
 
     def test_manual_selection_cleared_when_track_lost(self):
-        selector = TargetSelector()
+        selector = TargetSelector(max_missing_updates=1)
         selector.select(5)
         target = selector.update([_track(1)])
         self.assertIsNone(target)
         self.assertIsNone(selector.selected_id)
         self.assertFalse(selector.is_manual)
+
+    def test_manual_selection_persists_through_temporary_miss(self):
+        selector = TargetSelector(max_missing_updates=3)
+        manual = _track(5)
+
+        selector.select(5)
+        self.assertEqual(selector.update([manual]).track_id, 5)
+
+        # Single missed update should not clear manual selection.
+        self.assertIsNone(selector.update([]))
+        self.assertEqual(selector.selected_id, 5)
+        self.assertTrue(selector.is_manual)
+
+        # Target reacquired within tolerance keeps same identity.
+        self.assertEqual(selector.update([manual]).track_id, 5)
+
+    def test_auto_selection_persists_through_temporary_miss(self):
+        selector = TargetSelector(max_missing_updates=3)
+        auto = _track(2, x1=0.1, y1=0.1, x2=0.9, y2=0.9)
+
+        first = selector.update([auto])
+        self.assertIsNotNone(first)
+        self.assertEqual(first.track_id, 2)
+        self.assertFalse(selector.is_manual)
+
+        # Single miss should not clear selected id.
+        self.assertIsNone(selector.update([]))
+        self.assertEqual(selector.selected_id, 2)
+
+        # Reappearance preserves target id.
+        second = selector.update([auto])
+        self.assertIsNotNone(second)
+        self.assertEqual(second.track_id, 2)
+
+    def test_selection_clears_after_miss_tolerance(self):
+        selector = TargetSelector(max_missing_updates=2)
+        auto = _track(2)
+
+        selector.update([auto])
+        self.assertEqual(selector.selected_id, 2)
+        selector.update([])  # first miss retained
+        self.assertEqual(selector.selected_id, 2)
+        selector.update([])  # second miss clears
+        self.assertIsNone(selector.selected_id)
 
     def test_clear_reverts_to_auto(self):
         selector = TargetSelector()

@@ -74,6 +74,14 @@ class TestTracker(unittest.TestCase):
         tracker.update([])
         self.assertEqual(len(tracker.all_tracks), 1)
 
+    def test_track_evicted_at_max_missed_boundary(self):
+        tracker = Tracker(max_missed=2)
+        tracker.update([_det()])
+        tracker.update([])  # missed=1
+        self.assertEqual(len(tracker.all_tracks), 1)
+        tracker.update([])  # missed=2 => evicted
+        self.assertEqual(len(tracker.all_tracks), 0)
+
     def test_identity_persists_through_miss_and_recovery(self):
         tracker = Tracker(max_missed=3)
         tracker.update([_det()])
