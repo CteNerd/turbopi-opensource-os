@@ -1468,9 +1468,21 @@ class APIHandler(BaseHTTPRequestHandler):
                 self.send_error(503, "TTS service not configured")
                 return
 
-            content_length = int(self.headers.get('Content-Length', 0))
+            content_length_header = self.headers.get('Content-Length')
+            if content_length_header is None:
+                content_length = 0
+            else:
+                try:
+                    content_length = int(content_length_header)
+                except (TypeError, ValueError):
+                    self.send_error(400, "Invalid Content-Length header: must be an integer")
+                    return
+
             if content_length <= 0:
                 self.send_error(400, "Request body is required")
+                return
+            if content_length > (16 * 1024):
+                self.send_error(413, "TTS request too large")
                 return
 
             body = self.rfile.read(content_length).decode('utf-8')
@@ -1494,7 +1506,11 @@ class APIHandler(BaseHTTPRequestHandler):
                 audio_bytes = provider.synthesize(text, voice=voice)
             except TTSError as exc:
                 logging.error("TTS synthesis error: %s", exc)
-                self.send_error(503, str(exc))
+                self.send_error(503, "TTS provider temporarily unavailable")
+                return
+            except Exception as exc:
+                logging.error("Unexpected TTS provider error: %s", exc)
+                self.send_error(503, "TTS provider temporarily unavailable")
                 return
 
             self.send_response(200)

@@ -54,8 +54,8 @@ class OpenAITTSProvider:
                 raise TTSError('TTS authentication failed')
             if exc.code == 429:
                 raise TTSError('TTS rate limit exceeded')
-            raise TTSError(f'TTS provider returned HTTP {exc.code}')
+            raise TTSError('TTS provider temporarily unavailable')
         except urllib.error.URLError:
-            raise TTSError('TTS provider network unavailable')
-        except Exception as exc:
-            raise TTSError(f'TTS synthesis failed: {exc}')
+            raise TTSError('TTS provider temporarily unavailable')
+        except Exception:
+            raise TTSError('TTS provider temporarily unavailable')

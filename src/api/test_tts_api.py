@@ -69,6 +69,16 @@ class TestTTSEndpoint(unittest.TestCase):
         self.assertEqual(headers.get('Content-Type'), 'audio/mpeg')
         self.assertGreater(len(body), 0)
 
+    def test_tts_text_too_long(self):
+        status, _headers, _body = self._post_json('/voice/tts', {'text': 'x' * 1001})
+        self.assertEqual(status, 400)
+
+    def test_tts_provider_failure_returns_503(self):
+        APIHandler._tts_provider = _FakeTTSProvider(should_fail=True)
+        status, _headers, _body = self._post_json('/voice/tts', {'text': 'hello world'})
+        self.assertEqual(status, 503)
+        APIHandler._tts_provider = _FakeTTSProvider()
+
     def test_tts_endpoint_exists_post_only(self):
         req = urllib.request.Request(f'{self.base_url}/voice/tts', method='GET')
         with self.assertRaises(urllib.error.HTTPError) as ctx:

@@ -457,6 +457,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 audio.volume = ttsVolume;
                 audio.muted = ttsMuted;
                 audio.onended = () => URL.revokeObjectURL(audioUrl);
+                audio.onerror = () => URL.revokeObjectURL(audioUrl);
                 await audio.play();
                 showAlert('Playing TTS preview', 'success');
             }} catch (error) {{
