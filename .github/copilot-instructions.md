@@ -128,3 +128,17 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
   - Extract and validate configuration values (passwords, SSIDs) before service startup when possible
   - Check config files exist before extraction to provide better error messages
   - Validate extracted values meet requirements before displaying to users
+
+## 11) Documentation standards
+- Use relative markdown links for internal docs: `[file.md](./file.md)` not `[file.md](/docs/file.md)` or inline code paths.
+- Format all code-like fields consistently in lists: `` `field_name` `` (backticks), not plain text or mixed styles.
+- Link all spec/contract docs (OPENAPI.yaml, WEBSOCKET_SPECIAL.md, ARCHITECTURE.md) from relevant sections; update cross-references when adding new docs.
+- Documentation-only epics (e.g., migration runways, architecture guides) are safe to merge without code changes; prioritize clarity, link consistency, and alignment with existing docs.
+- When introducing new documentation, verify the path is correct (`docs/init/`, `docs/api/`, etc.) and add a discoverable link from parent README.
+
+## 12) Epic delivery workflow (multi-epic sequences)
+- For sequential epics (e.g., #27, #28, #29), use the "multi-epic sequential delivery" skill to maintain test coverage and PR hygiene across epic boundaries.
+- Minimal communication during execution: user provides direction once per epic ("proceed", "next epic").
+- 5-minute review gate before merge: wait for Copilot review comments to arrive before attempting merge.
+- Address all unresolved threads before merging; use targeted minimal fixes and concise replies to minimize review cycles.
+- After merge, automatically proceed to next epic: autonomous execution until user requests pause or direction change.
