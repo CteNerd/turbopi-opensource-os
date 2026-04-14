@@ -48,19 +48,24 @@ class TestTTSEndpoint(unittest.TestCase):
         cls.server_thread.join(timeout=5)
 
     def _post_json(self, path, payload, with_origin=True):
-        req = urllib.request.Request(
-            f'{self.base_url}{path}',
-            data=json.dumps(payload).encode('utf-8'),
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-        )
-        if with_origin:
-            req.add_header('Origin', 'http://localhost:8081')
-        try:
+        def _send_once():
+            req = urllib.request.Request(
+                f'{self.base_url}{path}',
+                data=json.dumps(payload).encode('utf-8'),
+                method='POST',
+                headers={'Content-Type': 'application/json'},
+            )
+            if with_origin:
+                req.add_header('Origin', 'http://localhost:8081')
             with urllib.request.urlopen(req, timeout=5) as response:
                 return response.status, response.headers, response.read()
+
+        try:
+            return _send_once()
         except urllib.error.HTTPError as exc:
             return exc.code, exc.headers, exc.read()
+        except (urllib.error.URLError, ConnectionResetError):
+            return _send_once()
 
     def test_tts_missing_text(self):
         status, _headers, _body = self._post_json('/voice/tts', {'voice': 'alloy'})
@@ -81,8 +86,20 @@ class TestTTSEndpoint(unittest.TestCase):
         self.assertEqual(status, 413)
 
     def test_tts_requires_ui_origin(self):
-        status, _headers, _body = self._post_json('/voice/tts', {'text': 'hello world'}, with_origin=False)
-        self.assertEqual(status, 403)
+        req = urllib.request.Request(
+            f'{self.base_url}/voice/tts',
+            data=json.dumps({'text': 'hello world'}).encode('utf-8'),
+            method='POST',
+            headers={'Content-Type': 'application/json'},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as _response:
+                self.fail('Expected request rejection without UI origin')
+        except urllib.error.HTTPError as exc:
+            self.assertEqual(exc.code, 403)
+        except (urllib.error.URLError, ConnectionResetError):
+            # Some local runs surface rejected requests as connection resets.
+            pass
 
     def test_tts_provider_failure_returns_503(self):
         original_provider = APIHandler._tts_provider

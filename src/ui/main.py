@@ -328,6 +328,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <p>FPS: <span id="videoFps" class="current-value">0.0</span></p>
             </div>
         </div>
+
+        <div class="section">
+            <h2>Conversation</h2>
+            <div id="chat-alert" class="alert"></div>
+            <div id="chatPanel" style="border:1px solid #d0d7de; border-radius:8px; padding:10px; min-height:140px; max-height:280px; overflow-y:auto; background:#fafafa;"></div>
+            <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; align-items:center;">
+                <input type="text" id="chatInput" placeholder="Ask TurboPi a question" style="flex:1; min-width:250px;">
+                <button class="button" onclick="sendChatMessage()">Send</button>
+            </div>
+            <div style="margin-top:10px;">
+                <label>
+                    <input type="checkbox" id="chatVoiceResponses" checked>
+                    <span class="checkbox-label">Speak replies with TTS</span>
+                </label>
+            </div>
+            <p class="info">Conversation responses are isolated from motion control and cannot execute robot movement commands.</p>
+        </div>
     </div>
 
     <script>
@@ -503,6 +520,95 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             alertDiv.style.display = 'block';
             if (type === 'success') {{
                 setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 3000);
+            }}
+        }}
+
+        function showChatAlert(message, type) {{
+            const alertDiv = document.getElementById('chat-alert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert ' + type;
+            alertDiv.style.display = 'block';
+            if (type === 'success') {{
+                setTimeout(() => {{ alertDiv.style.display = 'none'; }}, 3000);
+            }}
+        }}
+
+        function appendChatMessage(role, text) {{
+            const panel = document.getElementById('chatPanel');
+            const row = document.createElement('p');
+            row.style.margin = '8px 0';
+            row.innerHTML = '<strong>' + role + ':</strong> ' + text;
+            panel.appendChild(row);
+            panel.scrollTop = panel.scrollHeight;
+        }}
+
+        async function speakText(text) {{
+            let audioUrl = null;
+            const response = await fetch(API_BASE + '/voice/tts', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ text: text }}),
+            }});
+            if (!response.ok) {{
+                throw new Error(await getApiErrorMessage(response, 'Failed to synthesize speech'));
+            }}
+
+            const audioBlob = await response.blob();
+            audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.volume = ttsVolume;
+            audio.muted = ttsMuted;
+            audio.onended = () => URL.revokeObjectURL(audioUrl);
+            audio.onerror = () => URL.revokeObjectURL(audioUrl);
+            try {{
+                await audio.play();
+            }} catch (error) {{
+                if (audioUrl) {{
+                    URL.revokeObjectURL(audioUrl);
+                }}
+                throw error;
+            }}
+        }}
+
+        async function sendChatMessage() {{
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) {{
+                showChatAlert('Chat message cannot be empty.', 'error');
+                return;
+            }}
+
+            appendChatMessage('You', message);
+            input.value = '';
+
+            try {{
+                const response = await fetch(API_BASE + '/voice/conversation', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ message: message }}),
+                }});
+                if (!response.ok) {{
+                    throw new Error(await getApiErrorMessage(response, 'Conversation request failed'));
+                }}
+
+                const data = await response.json();
+                appendChatMessage('TurboPi', data.reply || 'No response');
+
+                if (data.guardrail_triggered) {{
+                    showChatAlert('Safety guardrail: command-like request blocked in conversation mode.', 'error');
+                }} else {{
+                    showChatAlert('Reply received.', 'success');
+                }}
+
+                if (document.getElementById('chatVoiceResponses').checked && data.reply) {{
+                    try {{
+                        await speakText(data.reply);
+                    }} catch (error) {{
+                        showChatAlert('Reply generated but TTS playback failed: ' + error.message, 'error');
+                    }}
+                }}
+            }} catch (error) {{
+                showChatAlert('Conversation error: ' + error.message, 'error');
             }}
         }}
 

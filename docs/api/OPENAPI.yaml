@@ -821,3 +821,37 @@ paths:
           description: Request payload too large
         '503':
           description: TTS provider unavailable or not configured
+
+  /voice/conversation:
+    post:
+      summary: Conversational response
+      description: Conversational pipeline endpoint isolated from control execution.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: Conversational reply
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+                  guardrail_triggered:
+                    type: boolean
+        '400':
+          description: Invalid request
+        '403':
+          description: Request origin is not allowed
+        '413':
+          description: Request payload too large
