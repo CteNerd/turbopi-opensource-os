@@ -122,6 +122,9 @@ class TestMotorCalibration(unittest.TestCase):
 
         hal.set_velocity(VelocityCommand(linear_mps=0.2, angular_rps=0.0))
         self.assertEqual(board.calls[-1], [[1, -20], [2, 20], [3, 0], [4, 20]])
+        self.assertEqual(hal.backend_name(), 'vendor')
+        self.assertEqual(hal.disabled_channels(), [3])
+        self.assertTrue(hal.degraded_reason().startswith('disabled_channels'))
 
     def test_factory_returns_sim_when_vendor_backend_unavailable(self):
         with patch.dict(os.environ, {'HAL_MOTOR_BACKEND': 'vendor'}, clear=False):
@@ -129,6 +132,19 @@ class TestMotorCalibration(unittest.TestCase):
                 hal = create_motor_hal_from_env()
 
         self.assertIsInstance(hal, SimulatedMotorHAL)
+
+    def test_factory_can_require_vendor_backend(self):
+        with patch.dict(
+            os.environ,
+            {
+                'HAL_MOTOR_BACKEND': 'vendor',
+                'HAL_MOTOR_VENDOR_REQUIRED': 'true',
+            },
+            clear=False,
+        ):
+            with patch('hal.motor.HiwonderTurboPiMotorHAL', side_effect=MotorSafetyError('unavailable')):
+                with self.assertRaises(MotorSafetyError):
+                    create_motor_hal_from_env()
 
 
 if __name__ == '__main__':

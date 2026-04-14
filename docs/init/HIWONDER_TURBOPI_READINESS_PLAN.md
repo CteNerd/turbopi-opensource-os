@@ -100,7 +100,13 @@ robot bring-up safely.
 - Added hardening control for unhealthy channels:
   - `HAL_MOTOR_DISABLED_CHANNELS` (for example `3`)
   - `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` to fail safe on degraded path
+- Added strict vendor backend startup option:
+  - `HAL_MOTOR_VENDOR_REQUIRED=true` fails startup when vendor backend is unavailable
 - Control arbiter now constructs motor HAL through config-driven factory (no bypass of arbiter/HAL contract).
+- Added control observability fields exposed via `/control/state`:
+  - `motor_backend`, `motor_disabled_channels`, `motor_degraded`, `motor_degraded_reason`
+- Added bench-validation utility:
+  - `system/motor_channel_probe.py` for manual-step low-duty channel tests
 
 ## Blocking Information Still Needed
 

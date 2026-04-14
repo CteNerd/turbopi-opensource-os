@@ -149,6 +149,18 @@ class BaseMotorHAL(ABC):
         """Return the current motor state snapshot."""
         return self._state
 
+    def backend_name(self) -> str:
+        """Return the motor backend identifier for diagnostics."""
+        return 'sim'
+
+    def disabled_channels(self) -> List[int]:
+        """Return disabled drive channels for degraded operation diagnostics."""
+        return []
+
+    def degraded_reason(self) -> Optional[str]:
+        """Return optional degraded-mode reason for diagnostics."""
+        return None
+
     def set_velocity(self, command: VelocityCommand) -> Tuple[float, float]:
         """Apply a safe velocity command to the motor driver."""
         if not self._state.armed:
@@ -225,7 +237,7 @@ class HiwonderTurboPiMotorHAL(BaseMotorHAL):
         super().__init__(calibration=calibration)
         self.board = board or self._build_vendor_board()
         self.max_duty = max(1, min(max_duty if max_duty is not None else _get_int('HAL_MOTOR_MAX_DUTY', 35), 100))
-        self.disabled_channels = disabled_channels if disabled_channels is not None else _get_int_set('HAL_MOTOR_DISABLED_CHANNELS')
+        self._disabled_channels = disabled_channels if disabled_channels is not None else _get_int_set('HAL_MOTOR_DISABLED_CHANNELS')
         self.block_on_disabled_channels = (
             block_on_disabled_channels
             if block_on_disabled_channels is not None
@@ -241,6 +253,20 @@ class HiwonderTurboPiMotorHAL(BaseMotorHAL):
         except Exception as exc:  # pragma: no cover - depends on target hardware environment
             raise MotorSafetyError('Vendor motor SDK unavailable') from exc
 
+    def backend_name(self) -> str:
+        """Return the motor backend identifier for diagnostics."""
+        return 'vendor'
+
+    def disabled_channels(self) -> List[int]:
+        """Return disabled drive channels for degraded operation diagnostics."""
+        return sorted(self._disabled_channels)
+
+    def degraded_reason(self) -> Optional[str]:
+        """Describe degraded mode when channels are disabled."""
+        if not self._disabled_channels:
+            return None
+        return f'disabled_channels:{sorted(self._disabled_channels)}'
+
     def _apply_outputs(self, left_output: float, right_output: float) -> None:
         """Apply left/right commands to the four vendor motor channels."""
         duty_by_channel = {
@@ -251,7 +277,7 @@ class HiwonderTurboPiMotorHAL(BaseMotorHAL):
         }
 
         unhealthy_channels = sorted(
-            ch for ch in self.disabled_channels if abs(duty_by_channel.get(ch, 0)) > 0
+            ch for ch in self._disabled_channels if abs(duty_by_channel.get(ch, 0)) > 0
         )
         if unhealthy_channels and self.block_on_disabled_channels:
             raise MotorSafetyError(
@@ -283,11 +309,19 @@ def create_motor_hal_from_env() -> BaseMotorHAL:
     - vendor: Hiwonder vendor SDK backend with fallback to simulation
     """
     backend = os.environ.get('HAL_MOTOR_BACKEND', 'sim').strip().lower()
+    vendor_required = _get_bool('HAL_MOTOR_VENDOR_REQUIRED', False)
     if backend == 'vendor':
         try:
             return HiwonderTurboPiMotorHAL()
-        except MotorSafetyError:
+        except MotorSafetyError as exc:
+            if vendor_required:
+                raise MotorSafetyError(
+                    'HAL_MOTOR_BACKEND=vendor but vendor backend is unavailable while HAL_MOTOR_VENDOR_REQUIRED=true'
+                ) from exc
             logger.warning('Falling back to SimulatedMotorHAL because vendor backend is unavailable')
             return SimulatedMotorHAL()
+
+    if backend != 'sim':
+        logger.warning('Unknown HAL_MOTOR_BACKEND=%s, falling back to sim', backend)
 
     return SimulatedMotorHAL()

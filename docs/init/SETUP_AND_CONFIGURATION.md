@@ -92,6 +92,7 @@ Motor output remains routed through the control arbiter and HAL. Select backend 
 
 - `HAL_MOTOR_BACKEND=sim` for simulation (default)
 - `HAL_MOTOR_BACKEND=vendor` for Hiwonder vendor SDK on target robot
+- `HAL_MOTOR_VENDOR_REQUIRED=true` to fail startup if vendor SDK is unavailable
 
 Field-hardening controls:
 
@@ -99,3 +100,10 @@ Field-hardening controls:
 - `HAL_MOTOR_DISABLED_CHANNELS` can disable known-bad channels (example `3`)
 - `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` fail-safes by rejecting non-zero
    motion commands that would energize a disabled channel
+
+Control diagnostics now expose motor runtime status at `/control/state`:
+
+- `motor_backend`
+- `motor_disabled_channels`
+- `motor_degraded`
+- `motor_degraded_reason`

@@ -98,6 +98,9 @@ class TestControlAPI(unittest.TestCase):
         self.assertIn('armed', payload)
         self.assertIn('estop_latched', payload)
         self.assertIn('deadman_triggered', payload)
+        self.assertIn('motor_backend', payload)
+        self.assertIn('motor_disabled_channels', payload)
+        self.assertIn('motor_degraded', payload)
 
     def test_control_post_requires_ui_origin(self):
         status, payload = self._post_no_origin('/control/arm')

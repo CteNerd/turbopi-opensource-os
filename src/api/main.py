@@ -1936,7 +1936,11 @@ def main():
     logging.info(f"Health endpoint: http://{host}:{port}/health")
 
     # Start websocket control channel in a background thread.
-    arbiter = APIHandler.get_control_arbiter()
+    try:
+        arbiter = APIHandler.get_control_arbiter()
+    except Exception as exc:
+        logging.error('Failed to initialize control arbiter: %s', exc)
+        sys.exit(1)
     bridge = ControlWebSocketBridge(arbiter)
     ui_port = int(os.environ.get('UI_PORT', '8081'))
 

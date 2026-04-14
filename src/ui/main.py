@@ -328,6 +328,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <p>Armed: <span id="armedValue" class="current-value">no</span></p>
                     <p>E-Stop Latched: <span id="estopValue" class="current-value">no</span></p>
                     <p>Deadman Triggered: <span id="deadmanValue" class="current-value">no</span></p>
+                    <p>Motor Backend: <span id="motorBackendValue" class="current-value">unknown</span></p>
+                    <p>Motor Degraded: <span id="motorDegradedValue" class="current-value">no</span></p>
+                    <p>Disabled Channels: <span id="motorDisabledChannelsValue" class="current-value">none</span></p>
                     <p>Follow Enabled: <span id="followEnabledValue" class="current-value">no</span></p>
                     <p>Follow Lost Target: <span id="followLostValue" class="current-value">no</span></p>
                     <p>Drive Linear: <span id="linearValue" class="current-value">0.00</span> m/s</p>
@@ -855,6 +858,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('armedValue').textContent = data.armed ? 'yes' : 'no';
                 document.getElementById('estopValue').textContent = data.estop_latched ? 'yes' : 'no';
                 document.getElementById('deadmanValue').textContent = data.deadman_triggered ? 'yes' : 'no';
+                document.getElementById('motorBackendValue').textContent = data.motor_backend || 'unknown';
+                document.getElementById('motorDegradedValue').textContent = data.motor_degraded ? 'yes' : 'no';
+                const disabled = Array.isArray(data.motor_disabled_channels) ? data.motor_disabled_channels : [];
+                document.getElementById('motorDisabledChannelsValue').textContent = disabled.length ? disabled.join(', ') : 'none';
                 if (typeof data.max_linear_speed === 'number') {{
                     controlMaxLinear = data.max_linear_speed;
                 }}

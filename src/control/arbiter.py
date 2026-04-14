@@ -4,7 +4,7 @@
 import os
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from control.behavior import BehaviorCommand
 from hal.motor import MotorSafetyError, VelocityCommand, create_motor_hal_from_env
@@ -50,6 +50,10 @@ class ControlState:
     max_linear_speed: float
     max_angular_speed: float
     active_behavior: Optional[str]
+    motor_backend: str
+    motor_disabled_channels: List[int]
+    motor_degraded: bool
+    motor_degraded_reason: Optional[str]
 
     def to_dict(self) -> Dict[str, object]:
         """Serialize to JSON-friendly dictionary."""
@@ -63,6 +67,10 @@ class ControlState:
             'max_linear_speed': self.max_linear_speed,
             'max_angular_speed': self.max_angular_speed,
             'active_behavior': self.active_behavior,
+            'motor_backend': self.motor_backend,
+            'motor_disabled_channels': self.motor_disabled_channels,
+            'motor_degraded': self.motor_degraded,
+            'motor_degraded_reason': self.motor_degraded_reason,
         }
 
 
@@ -107,6 +115,10 @@ class ControlArbiter:
             max_linear_speed=self.max_linear_speed,
             max_angular_speed=self.max_angular_speed,
             active_behavior=active_behavior,
+            motor_backend=self.motor_hal.backend_name(),
+            motor_disabled_channels=self.motor_hal.disabled_channels(),
+            motor_degraded=bool(self.motor_hal.disabled_channels()),
+            motor_degraded_reason=self.motor_hal.degraded_reason(),
         )
 
     def arm(self) -> Dict[str, object]:

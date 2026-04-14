@@ -528,6 +528,22 @@ paths:
                   angular_rps: { type: number }
                   max_linear_speed: { type: number }
                   max_angular_speed: { type: number }
+                  active_behavior:
+                    type: string
+                    nullable: true
+                  motor_backend:
+                    type: string
+                    enum: [sim, vendor]
+                  motor_disabled_channels:
+                    type: array
+                    items:
+                      type: integer
+                      minimum: 1
+                      maximum: 4
+                  motor_degraded: { type: boolean }
+                  motor_degraded_reason:
+                    type: string
+                    nullable: true
 
   /control/follow/start:
     post:
