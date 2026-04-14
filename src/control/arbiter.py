@@ -134,7 +134,10 @@ class ControlArbiter:
 
     def disarm(self) -> Dict[str, object]:
         """Disarm control path and stop all motion."""
-        self.motor_hal.disarm()
+        try:
+            self.motor_hal.disarm()
+        except MotorSafetyError as exc:
+            logging.error('Motor disarm failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
@@ -143,7 +146,10 @@ class ControlArbiter:
     def engage_estop(self) -> Dict[str, object]:
         """Latch E-Stop and force immediate stop/disarm."""
         self.estop_latched = True
-        self.motor_hal.disarm()
+        try:
+            self.motor_hal.disarm()
+        except MotorSafetyError as exc:
+            logging.error('Motor disarm during E-Stop failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
@@ -220,7 +226,10 @@ class ControlArbiter:
 
     def stop(self) -> Dict[str, object]:
         """Stop motion while preserving arm state."""
-        self.motor_hal.stop()
+        try:
+            self.motor_hal.stop()
+        except MotorSafetyError as exc:
+            logging.error('Motor stop failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None

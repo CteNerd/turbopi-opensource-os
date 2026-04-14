@@ -61,7 +61,7 @@ Complete a sequence of numbered epics efficiently, maintaining test coverage and
 ### Safety/Contract Comments
 - **Pattern**: "Validate input", "Check for timeout/disconnect", "Preserve arbiter path"
 - **Response**: Implement validation; explain safety contract preserved
-- **Validation**: Run safety-specific tests (discontinection handling, input boundary tests)
+- **Validation**: Run safety-specific tests (disconnection handling, input boundary tests)
 
 ### Documentation Comments
 - **Pattern**: "Fix link path", "Add missing field", "Clarify title"

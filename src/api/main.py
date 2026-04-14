@@ -1939,7 +1939,7 @@ def main():
     try:
         arbiter = APIHandler.get_control_arbiter()
     except Exception as exc:
-        logging.error('Failed to initialize control arbiter: %s', exc)
+        logging.exception('Failed to initialize control arbiter')
         sys.exit(1)
     bridge = ControlWebSocketBridge(arbiter)
     ui_port = int(os.environ.get('UI_PORT', '8081'))
