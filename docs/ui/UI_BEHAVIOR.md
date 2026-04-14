@@ -43,6 +43,12 @@
 - UI exposes volume slider and mute toggle for TTS playback
 - TTS volume/mute controls affect browser playback, not motor/safety control
 
+## Conversation Panel
+- UI sends chat messages to POST /voice/conversation and renders assistant replies
+- UI can optionally speak assistant replies through POST /voice/tts
+- Conversation guardrail responses are shown explicitly in the chat alert area
+- Conversation mode cannot execute motor/control actions
+
 ## System Status Page
 - UI displays expanded health data from GET /health (uptime, temperature, memory, disk, services)
 - UI refreshes system status automatically while page is open

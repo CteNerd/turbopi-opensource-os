@@ -78,6 +78,15 @@ FALLBACK_JPEG_BYTES = base64.b64decode(
 
 _SERVICE_STATE_CACHE = {'timestamp': 0.0, 'states': {}}
 _SERVICE_STATE_CACHE_LOCK = threading.Lock()
+_CONVERSATION_GUARDRAIL_PATTERNS = (
+    r'\bestop\b',
+    r'\bemergency\s+stop\b',
+    r'\bdisarm\b',
+    r'\barm\b',
+    r'\bfollow\b',
+    r'\bdrive\b',
+    r'\bmove\b',
+)
 
 
 def is_valid_control_ws_origin(origin: Optional[str], host_header: Optional[str], ui_port: int) -> bool:
@@ -216,6 +225,79 @@ def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) 
         return True
     except Exception:
         return False
+
+
+def conversation_guardrail_triggered(message: str, parser: Optional['CommandIntentParser']) -> bool:
+    """Return True when a message looks like a control/action command.
+
+    Conversation endpoint must stay isolated from motion/control pathways.
+    """
+    text = (message or '').strip().lower()
+    if not text:
+        return False
+
+    if parser is not None:
+        try:
+            intent = parser.parse(text)
+            if intent.is_valid() and intent.command.value in ('STOP', 'FOLLOW'):
+                return True
+        except Exception:
+            pass
+
+    return any(re.search(pattern, text) for pattern in _CONVERSATION_GUARDRAIL_PATTERNS)
+
+
+def generate_conversation_reply(message: str) -> str:
+    """Generate a conversational response using OpenAI when configured.
+
+    Falls back to deterministic local replies if cloud inference is unavailable.
+    """
+    api_key = os.environ.get('OPENAI_API_KEY', '').strip()
+    if not api_key:
+        return (
+            "I can chat about system status and setup help. "
+            "Voice commands that control motion stay isolated from conversation for safety."
+        )
+
+    payload = {
+        'model': os.environ.get('CONVERSATION_MODEL', 'gpt-4o-mini'),
+        'messages': [
+            {
+                'role': 'system',
+                'content': (
+                    'You are TurboPi assistant. Keep responses concise, helpful, and safe. '
+                    'Never provide direct motor-control execution steps. '
+                    'If asked for movement/control, direct users to dedicated control endpoints/UI.'
+                ),
+            },
+            {'role': 'user', 'content': message},
+        ],
+        'temperature': 0.3,
+    }
+
+    req = urllib.request.Request(
+        'https://api.openai.com/v1/chat/completions',
+        data=json.dumps(payload).encode('utf-8'),
+        method='POST',
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            choices = data.get('choices') or []
+            if not choices:
+                return 'I could not generate a response right now.'
+            content = (choices[0].get('message') or {}).get('content', '').strip()
+            return content or 'I could not generate a response right now.'
+    except Exception:
+        return (
+            "I am temporarily unable to reach the conversation provider. "
+            "Please try again in a moment."
+        )
 
 
 def _disk_usage(path: str = '/') -> Dict[str, float]:
@@ -798,6 +880,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_voice_command()
         elif self.path == '/voice/tts':
             self.handle_voice_tts()
+        elif self.path == '/voice/conversation':
+            self.handle_voice_conversation()
         else:
             self.send_error(404, "Not Found")
 
@@ -1525,6 +1609,67 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             logging.error("TTS endpoint error: %s", exc)
             self.send_error(500, "Internal Server Error: Unable to synthesize speech")
+
+    def handle_voice_conversation(self):
+        """Handle POST /voice/conversation endpoint.
+
+        This endpoint is intentionally isolated from control execution. It can
+        produce conversational replies only.
+        """
+        try:
+            if not self._require_ui_origin():
+                return
+
+            content_length_header = self.headers.get('Content-Length')
+            if content_length_header is None:
+                content_length = 0
+            else:
+                try:
+                    content_length = int(content_length_header)
+                except (TypeError, ValueError):
+                    self.send_error(400, "Invalid Content-Length header: must be an integer")
+                    return
+
+            if content_length <= 0:
+                self.send_error(400, "Request body is required")
+                return
+            if content_length > (16 * 1024):
+                self.send_error(413, "Conversation request too large")
+                return
+
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON in request body")
+                return
+
+            message = str(payload.get('message', '')).strip()
+            if not message:
+                self.send_error(400, "Missing required field: message")
+                return
+            if len(message) > 1000:
+                self.send_error(400, "Message is too long (max 1000 characters)")
+                return
+
+            parser = self.get_command_parser()
+            if conversation_guardrail_triggered(message, parser):
+                self._send_json_response(200, {
+                    'reply': (
+                        'I cannot process control commands in conversation mode. '
+                        'Use the dedicated control UI or voice command endpoint.'
+                    ),
+                    'guardrail_triggered': True,
+                })
+                return
+
+            reply = generate_conversation_reply(message)
+            self._send_json_response(200, {
+                'reply': reply,
+                'guardrail_triggered': False,
+            })
+        except Exception as exc:
+            logging.error('Conversation endpoint error: %s', exc)
+            self.send_error(500, 'Internal Server Error: Unable to process conversation request')
 
 
 def main():

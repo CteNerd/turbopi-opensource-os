@@ -56,6 +56,12 @@ Voice functionality is integrated into the TurboPi API service with the followin
 **Command Parsing:**
 - `POST /voice/command` - Parse voice transcript into command intent for safety arbiter
 
+**Conversation:**
+- `POST /voice/conversation` - Generate conversational reply (isolated from control execution)
+
+**Text-to-Speech:**
+- `POST /voice/tts` - Convert text reply to audio for UI playback
+
 **Text-to-Speech:**
 - `POST /voice/tts` - Synthesize text to audio/mpeg for UI playback
 
@@ -97,12 +103,13 @@ OPENAI_API_KEY=your-key-here  # Required for STT functionality
 1. **No Motor Control**: Wake word detection and command parser have no interface to motor control systems
 2. **Voice Capture Only**: Wake word only arms STT voice capture
 3. **Intent-Based Commands**: Command parser outputs intents only - execution requires safety arbiter approval
-4. **STOP Always Works**: STOP command has highest priority and is always recognized
-5. **Unknown Commands Rejected**: Unrecognized commands are explicitly rejected, not guessed
-6. **Timeout Protection**: Armed state automatically times out after configured duration
-7. **ASCII Only**: Wake words are validated to be ASCII-only
-8. **Thread Safe**: All operations are thread-safe
-9. **Audit Trail**: All parsed commands preserve raw transcript for logging and review
+4. **Conversation Isolation**: Conversation endpoint cannot execute control actions and rejects command-like requests via guardrails
+5. **STOP Always Works**: STOP command has highest priority and is always recognized
+6. **Unknown Commands Rejected**: Unrecognized commands are explicitly rejected, not guessed
+7. **Timeout Protection**: Armed state automatically times out after configured duration
+8. **ASCII Only**: Wake words are validated to be ASCII-only
+9. **Thread Safe**: All operations are thread-safe
+10. **Audit Trail**: All parsed commands preserve raw transcript for logging and review
 
 ## Usage
 
