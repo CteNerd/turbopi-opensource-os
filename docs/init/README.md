@@ -23,3 +23,5 @@ autonomy, vision, and voice interaction.
 - Extensible architecture with a future ROS 2 migration path
 
 See `/docs/ARCHITECTURE.md` for system design.
+
+For ROS 2 adoption sequencing and boundaries, see `docs/init/ROS2_MIGRATION_RUNWAY.md`.
