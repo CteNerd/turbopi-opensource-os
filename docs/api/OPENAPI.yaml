@@ -800,6 +800,7 @@ paths:
               properties:
                 text:
                   type: string
+                  maxLength: 1000
                   description: Text to synthesize (max 1000 chars)
                 voice:
                   type: string
@@ -814,5 +815,9 @@ paths:
                 format: binary
         '400':
           description: Invalid request (for example missing text)
+        '403':
+          description: Request origin is not allowed
+        '413':
+          description: Request payload too large
         '503':
           description: TTS provider unavailable or not configured
