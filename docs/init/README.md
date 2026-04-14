@@ -25,3 +25,5 @@ autonomy, vision, and voice interaction.
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for system design.
 
 For ROS 2 adoption sequencing and boundaries, see [ROS2_MIGRATION_RUNWAY.md](./ROS2_MIGRATION_RUNWAY.md).
+
+For a practical hardware readiness status, missing data checklist, and staged integration plan for the Hiwonder TurboPi kit, see [HIWONDER_TURBOPI_READINESS_PLAN.md](./HIWONDER_TURBOPI_READINESS_PLAN.md).

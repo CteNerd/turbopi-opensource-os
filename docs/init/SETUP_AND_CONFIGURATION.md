@@ -84,3 +84,31 @@ Once configured, the home Wi-Fi connection:
 - Secrets never stored in repo
 - Secrets never exposed to browser JS
 - All services load config via systemd
+
+## Motor HAL Backend Configuration
+
+Motor output remains routed through the control arbiter and HAL. Select backend in
+`/etc/turbopi/config.env`:
+
+- `HAL_MOTOR_BACKEND=sim` for simulation (default)
+- `HAL_MOTOR_BACKEND=vendor` for Hiwonder vendor SDK on target robot
+- `HAL_MOTOR_VENDOR_REQUIRED=true` to fail startup if vendor SDK is unavailable
+
+Field-hardening controls:
+
+- `HAL_MOTOR_MAX_DUTY` caps duty output (1-100)
+- `HAL_MOTOR_DISABLED_CHANNELS` can disable known-bad channels (example `3`)
+- `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` fail-safes by rejecting non-zero
+   motion commands that would energize a disabled channel
+- `HAL_MOTOR_CHANNEL_SCALE_1..4` provides optional per-wheel tuning multipliers
+   for minor variance after bench validation
+
+Use `system/motor_channel_tune.py` on the robot for interactive breakaway-duty
+tuning and optional config write-back to `/etc/turbopi/config.env`.
+
+Control diagnostics now expose motor runtime status at `/control/state`:
+
+- `motor_backend`
+- `motor_disabled_channels`
+- `motor_degraded`
+- `motor_degraded_reason`

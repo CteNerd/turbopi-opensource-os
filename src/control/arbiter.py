@@ -4,10 +4,10 @@
 import os
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from control.behavior import BehaviorCommand
-from hal.motor import MotorSafetyError, SimulatedMotorHAL, VelocityCommand
+from hal.motor import MotorSafetyError, VelocityCommand, create_motor_hal_from_env
 
 
 def _get_float(name: str, default: float) -> float:
@@ -50,6 +50,10 @@ class ControlState:
     max_linear_speed: float
     max_angular_speed: float
     active_behavior: Optional[str]
+    motor_backend: str
+    motor_disabled_channels: List[int]
+    motor_degraded: bool
+    motor_degraded_reason: Optional[str]
 
     def to_dict(self) -> Dict[str, object]:
         """Serialize to JSON-friendly dictionary."""
@@ -63,6 +67,10 @@ class ControlState:
             'max_linear_speed': self.max_linear_speed,
             'max_angular_speed': self.max_angular_speed,
             'active_behavior': self.active_behavior,
+            'motor_backend': self.motor_backend,
+            'motor_disabled_channels': self.motor_disabled_channels,
+            'motor_degraded': self.motor_degraded,
+            'motor_degraded_reason': self.motor_degraded_reason,
         }
 
 
@@ -70,7 +78,7 @@ class ControlArbiter:
     """Arbiter that enforces safety before forwarding commands to motor HAL."""
 
     def __init__(self, motor_hal=None):
-        self.motor_hal = motor_hal or SimulatedMotorHAL()
+        self.motor_hal = motor_hal or create_motor_hal_from_env()
         self.max_linear_speed = max(_get_float('MAX_LINEAR_SPEED', 0.5), 0.01)
         self.max_angular_speed = max(_get_float('MAX_ANGULAR_SPEED', 1.2), 0.01)
         self.deadman_timeout_s = max(_get_int('DEADMAN_TIMEOUT_MS', 500), 1) / 1000.0
@@ -107,6 +115,10 @@ class ControlArbiter:
             max_linear_speed=self.max_linear_speed,
             max_angular_speed=self.max_angular_speed,
             active_behavior=active_behavior,
+            motor_backend=self.motor_hal.backend_name(),
+            motor_disabled_channels=self.motor_hal.disabled_channels(),
+            motor_degraded=bool(self.motor_hal.disabled_channels()),
+            motor_degraded_reason=self.motor_hal.degraded_reason(),
         )
 
     def arm(self) -> Dict[str, object]:
@@ -122,7 +134,10 @@ class ControlArbiter:
 
     def disarm(self) -> Dict[str, object]:
         """Disarm control path and stop all motion."""
-        self.motor_hal.disarm()
+        try:
+            self.motor_hal.disarm()
+        except MotorSafetyError as exc:
+            logging.error('Motor disarm failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
@@ -131,7 +146,10 @@ class ControlArbiter:
     def engage_estop(self) -> Dict[str, object]:
         """Latch E-Stop and force immediate stop/disarm."""
         self.estop_latched = True
-        self.motor_hal.disarm()
+        try:
+            self.motor_hal.disarm()
+        except MotorSafetyError as exc:
+            logging.error('Motor disarm during E-Stop failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
@@ -208,7 +226,10 @@ class ControlArbiter:
 
     def stop(self) -> Dict[str, object]:
         """Stop motion while preserving arm state."""
-        self.motor_hal.stop()
+        try:
+            self.motor_hal.stop()
+        except MotorSafetyError as exc:
+            logging.error('Motor stop failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None

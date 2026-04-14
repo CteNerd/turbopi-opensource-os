@@ -35,6 +35,20 @@ class TestControlArbiter(unittest.TestCase):
         self.assertEqual(self.arbiter.disarm()['status'], 'disarmed')
         self.assertFalse(self.arbiter.get_state().armed)
 
+    def test_default_constructor_uses_motor_hal_factory(self):
+        with patch('control.arbiter.create_motor_hal_from_env', return_value=SimulatedMotorHAL()) as factory:
+            arbiter = ControlArbiter()
+
+        factory.assert_called_once()
+        self.assertIsNotNone(arbiter.motor_hal)
+
+    def test_control_state_includes_motor_diagnostics(self):
+        state = self.arbiter.get_state().to_dict()
+        self.assertEqual(state.get('motor_backend'), 'sim')
+        self.assertEqual(state.get('motor_disabled_channels'), [])
+        self.assertFalse(state.get('motor_degraded'))
+        self.assertIsNone(state.get('motor_degraded_reason'))
+
     def test_estop_blocks_arm_until_cleared(self):
         self.arbiter.engage_estop()
         result = self.arbiter.arm()

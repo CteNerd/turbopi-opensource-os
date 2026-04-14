@@ -21,6 +21,8 @@ This directory contains system-level configuration files for TurboPi OpenSource 
 - `install-services.sh` - Runtime service installation script
 - `test-dual-networking.sh` - Integration test suite for dual networking
 - `test-services.sh` - Runtime service test suite
+- `motor_channel_probe.py` - Manual-step low-duty motor channel probe for safe bench validation
+- `motor_channel_tune.py` - Interactive breakaway-duty tuner with optional config write-back
 
 ## Runtime Services
 
@@ -78,6 +80,35 @@ The emergency access point provides always-on network access for setup and recov
 - **Robot IP**: `192.168.50.1`
 - **DHCP Range**: `192.168.50.10` - `192.168.50.50`
 - **Subnet**: `192.168.50.0/24`
+
+## Motor Channel Probe (Bench Validation)
+
+Use the probe utility on the robot to validate wheel/channel mapping and direction with
+manual pacing between steps:
+
+```bash
+python3 /path/to/repo/system/motor_channel_probe.py --confirm-lifted
+```
+
+Notes:
+- Keep wheels lifted off the ground.
+- The script sends short low-duty pulses and forces stop between each step.
+- Use this during hardware hardening (for example CH3 isolation verification).
+
+## Motor Channel Tuning (Bench Hardening)
+
+Use the tuning utility to estimate per-wheel breakaway duty and generate
+`HAL_MOTOR_CHANNEL_SCALE_1..4` recommendations:
+
+```bash
+python3 /path/to/repo/system/motor_channel_tune.py --confirm-lifted
+```
+
+To write values directly into config (with backup):
+
+```bash
+sudo python3 /path/to/repo/system/motor_channel_tune.py --confirm-lifted --write-config --config-path /etc/turbopi/config.env
+```
 
 ### Security
 

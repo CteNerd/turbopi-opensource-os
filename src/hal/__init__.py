@@ -3,11 +3,14 @@
 
 from .camera import CameraCalibration, CameraError, CameraFrame, FakeCameraHAL
 from .motor import (
+    BaseMotorHAL,
+    HiwonderTurboPiMotorHAL,
     MotorCalibration,
     MotorSafetyError,
     MotorState,
     SimulatedMotorHAL,
     VelocityCommand,
+    create_motor_hal_from_env,
 )
 from .sensor import FakeSensorHAL, SensorCalibration, SensorError, SensorReading
 
@@ -16,6 +19,8 @@ __all__ = [
     'CameraError',
     'CameraFrame',
     'FakeCameraHAL',
+    'BaseMotorHAL',
+    'HiwonderTurboPiMotorHAL',
     'MotorCalibration',
     'MotorSafetyError',
     'MotorState',
@@ -25,4 +30,5 @@ __all__ = [
     'SimulatedMotorHAL',
     'FakeSensorHAL',
     'VelocityCommand',
+    'create_motor_hal_from_env',
 ]

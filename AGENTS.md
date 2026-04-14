@@ -19,3 +19,10 @@ Control/WebSocket safety checklist (manual control work):
 - Treat websocket server dependency as required when teleoperation is enabled.
 - Keep OpenAPI and websocket docs synchronized with 403/error behavior and safety semantics.
 - Avoid hard-coded joystick limits in UI; derive from backend-reported limits/config.
+
+Hardware readiness intake checklist (TurboPi bring-up):
+- Collect explicit hardware evidence before coding drivers: board revision, motor chip, pin/channel map, servo limits, sensor bus map.
+- Prefer vendor manuals/tutorial bundles over product listing text.
+- Record verified facts and open gaps in `docs/init/HIWONDER_TURBOPI_READINESS_PLAN.md`.
+- Never guess motor channel ordering or GPIO/I2C mappings.
+- Preserve safety invariants during bring-up: disarmed boot, estop priority, disconnect-stop.

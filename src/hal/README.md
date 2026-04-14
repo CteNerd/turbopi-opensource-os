@@ -7,6 +7,7 @@ device access out of higher-level services.
 
 This module currently provides:
 - Motor HAL primitives with safe startup and calibration support
+- Config-selectable motor backend (`sim` or vendor hardware)
 - Camera HAL primitives for frame capture workflows
 - Sensor HAL primitives for calibrated sensor reads
 
@@ -34,10 +35,27 @@ Calibration is loaded from runtime environment values in
 Motor calibration keys:
 - `MAX_LINEAR_SPEED`
 - `MAX_ANGULAR_SPEED`
+- `HAL_MOTOR_BACKEND` (`sim` or `vendor`)
+- `HAL_MOTOR_VENDOR_REQUIRED`
 - `HAL_MOTOR_LEFT_TRIM`
 - `HAL_MOTOR_RIGHT_TRIM`
 - `HAL_MOTOR_LEFT_SCALE`
 - `HAL_MOTOR_RIGHT_SCALE`
+- `HAL_MOTOR_MAX_DUTY`
+- `HAL_MOTOR_DISABLED_CHANNELS`
+- `HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS`
+- `HAL_MOTOR_CHANNEL_SCALE_1`
+- `HAL_MOTOR_CHANNEL_SCALE_2`
+- `HAL_MOTOR_CHANNEL_SCALE_3`
+- `HAL_MOTOR_CHANNEL_SCALE_4`
+
+For field hardening scenarios (for example, an unhealthy CH3 path), set
+`HAL_MOTOR_DISABLED_CHANNELS=3` and keep
+`HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS=true` to prevent unsafe degraded motion.
+
+For minor wheel variance or stiction tuning after hardware checks, use
+`HAL_MOTOR_CHANNEL_SCALE_*` to apply per-channel multipliers without bypassing
+the arbiter/HAL safety contract.
 
 Camera calibration keys:
 - `HAL_CAMERA_WIDTH`
