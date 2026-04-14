@@ -262,6 +262,25 @@ paths:
                 properties:
                   error: { type: string, example: forbidden }
                   message: { type: string }
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: payload_too_large }
+                  message: { type: string }
+        '500':
+          description: Settings applied at runtime but failed to persist, or unexpected server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: persistence_failed }
+                  message: { type: string }
+                  persisted: { type: boolean }
 
   /network/wifi/status:
     get:

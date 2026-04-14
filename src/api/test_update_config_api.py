@@ -11,6 +11,7 @@ import unittest
 import urllib.error
 import urllib.request
 from http.server import HTTPServer
+from unittest.mock import patch
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -29,17 +30,18 @@ class TestUpdateConfigAPI(unittest.TestCase):
             handle.write('ROBOT_NAME=TestBot\n')
 
         os.environ['API_HOST'] = 'localhost'
-        os.environ['API_PORT'] = '18087'
         os.environ['CONFIG_ENV_PATH'] = cls._config_path
         os.environ['AUTO_UPDATE'] = 'false'
         os.environ['AUTO_UPDATE_CHANNEL'] = 'stable'
         os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = '03:00'
 
-        cls.server = HTTPServer(('localhost', 18087), APIHandler)
+        cls.server = HTTPServer(('localhost', 0), APIHandler)
+        assigned_port = cls.server.server_address[1]
+        os.environ['API_PORT'] = str(assigned_port)
         cls.server_thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.server_thread.start()
         time.sleep(0.5)
-        cls.base_url = 'http://localhost:18087'
+        cls.base_url = f'http://localhost:{assigned_port}'
 
     @classmethod
     def tearDownClass(cls):
@@ -129,6 +131,39 @@ class TestUpdateConfigAPI(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertEqual(data.get('error'), 'bad_request')
+
+    def test_post_update_config_rejects_non_object_json(self):
+        status, data = self._make_request(
+            '/updates/config',
+            method='POST',
+            data=['not-an-object'],
+            origin='http://localhost:8081',
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(data.get('error'), 'bad_request')
+
+    def test_post_update_config_rejects_payload_too_large(self):
+        status, data = self._make_request(
+            '/updates/config',
+            method='POST',
+            data={'schedule_utc': '03:00', 'padding': 'x' * 6000},
+            origin='http://localhost:8081',
+        )
+        self.assertEqual(status, 413)
+        self.assertEqual(data.get('error'), 'payload_too_large')
+
+    def test_post_update_config_returns_500_when_persistence_fails(self):
+        with patch('main.persist_update_config', return_value=False):
+            status, data = self._make_request(
+                '/updates/config',
+                method='POST',
+                data={'auto_update': True},
+                origin='http://localhost:8081',
+            )
+
+        self.assertEqual(status, 500)
+        self.assertEqual(data.get('error'), 'persistence_failed')
+        self.assertFalse(data.get('persisted'))
 
 
 if __name__ == '__main__':

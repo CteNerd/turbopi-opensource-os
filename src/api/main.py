@@ -79,6 +79,7 @@ FALLBACK_JPEG_BYTES = base64.b64decode(
 _SERVICE_STATE_CACHE = {'timestamp': 0.0, 'states': {}}
 _SERVICE_STATE_CACHE_LOCK = threading.Lock()
 _SCHEDULE_HHMM_RE = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
+_MAX_UPDATE_CONFIG_BODY_BYTES = 4096
 _CONVERSATION_GUARDRAIL_PATTERNS = (
     r'\bestop\b',
     r'\bemergency\s+stop\b',
@@ -183,6 +184,7 @@ def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) 
             with open(config_path, 'r', encoding='utf-8') as handle:
                 existing_lines = handle.readlines()
         except Exception:
+            logging.exception('Failed reading update config file for persistence')
             return False
 
     replacements = {}
@@ -225,6 +227,7 @@ def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) 
         os.replace(tmp_path, config_path)
         return True
     except Exception:
+        logging.exception('Failed writing persisted update configuration')
         return False
 
 
@@ -1109,92 +1112,126 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def handle_updates_config_update(self):
         """Handle POST /updates/config endpoint."""
-        if not self._require_ui_origin():
-            return
-
-        content_length_header = self.headers.get('Content-Length')
-        if content_length_header is None:
-            content_length = 0
-        else:
-            try:
-                content_length = int(content_length_header)
-            except (TypeError, ValueError):
-                self._send_json_response(400, {
-                    'error': 'bad_request',
-                    'message': 'Invalid Content-Length header: must be an integer',
-                })
-                return
-
-        if content_length <= 0:
-            self._send_json_response(400, {
-                'error': 'bad_request',
-                'message': 'Request body is required',
-            })
-            return
-
         try:
-            payload = json.loads(self.rfile.read(content_length).decode('utf-8'))
-        except json.JSONDecodeError:
-            self._send_json_response(400, {
-                'error': 'bad_request',
-                'message': 'Invalid JSON in request body',
+            if not self._require_ui_origin():
+                return
+
+            content_length_header = self.headers.get('Content-Length')
+            if content_length_header is None:
+                content_length = 0
+            else:
+                try:
+                    content_length = int(content_length_header)
+                except (TypeError, ValueError):
+                    self._send_json_response(400, {
+                        'error': 'bad_request',
+                        'message': 'Invalid Content-Length header: must be an integer',
+                    })
+                    return
+
+            if content_length <= 0:
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Request body is required',
+                })
+                return
+
+            if content_length > _MAX_UPDATE_CONFIG_BODY_BYTES:
+                self._send_json_response(413, {
+                    'error': 'payload_too_large',
+                    'message': f'Request body exceeds {_MAX_UPDATE_CONFIG_BODY_BYTES} bytes',
+                })
+                return
+
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Invalid JSON in request body',
+                })
+                return
+
+            if not isinstance(payload, dict):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Request body must be a JSON object',
+                })
+                return
+
+            if not any(key in payload for key in ('auto_update', 'channel', 'schedule_utc')):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'At least one of auto_update, channel, or schedule_utc is required',
+                })
+                return
+
+            auto_update_value = None
+            if 'auto_update' in payload:
+                if not isinstance(payload['auto_update'], bool):
+                    self._send_json_response(400, {
+                        'error': 'bad_request',
+                        'message': 'auto_update must be a boolean',
+                    })
+                    return
+                auto_update_value = payload['auto_update']
+
+            channel_value = None
+            if 'channel' in payload:
+                channel = str(payload['channel']).strip().lower()
+                if channel != 'stable':
+                    self._send_json_response(400, {
+                        'error': 'bad_request',
+                        'message': 'Only stable channel is allowed',
+                    })
+                    return
+                channel_value = channel
+
+            schedule_value = None
+            if 'schedule_utc' in payload:
+                schedule = str(payload['schedule_utc']).strip()
+                if not _SCHEDULE_HHMM_RE.match(schedule):
+                    self._send_json_response(400, {
+                        'error': 'bad_request',
+                        'message': 'schedule_utc must be in HH:MM 24-hour format (UTC)',
+                    })
+                    return
+                schedule_value = schedule
+
+            if auto_update_value is not None:
+                os.environ['AUTO_UPDATE'] = 'true' if auto_update_value else 'false'
+            if channel_value is not None:
+                os.environ['AUTO_UPDATE_CHANNEL'] = channel_value
+            if schedule_value is not None:
+                os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = schedule_value
+
+            persisted = persist_update_config(
+                auto_update=auto_update_value,
+                channel=channel_value,
+                schedule_utc=schedule_value,
+            )
+            response = get_update_config()
+            response['persisted'] = persisted
+            if not persisted:
+                logging.warning(
+                    'Update config applied for current runtime but failed to persist; '
+                    'settings will not survive reboot'
+                )
+                response['error'] = 'persistence_failed'
+                response['message'] = (
+                    'Settings were applied for the current runtime, but failed to persist '
+                    'and will not survive reboot'
+                )
+                self._send_json_response(500, response)
+                return
+
+            self._send_json_response(200, response)
+        except Exception:
+            logging.exception('Unexpected error while updating update configuration')
+            self._send_json_response(500, {
+                'error': 'internal_server_error',
+                'message': 'Failed to update update configuration',
             })
-            return
-
-        if not any(key in payload for key in ('auto_update', 'channel', 'schedule_utc')):
-            self._send_json_response(400, {
-                'error': 'bad_request',
-                'message': 'At least one of auto_update, channel, or schedule_utc is required',
-            })
-            return
-
-        auto_update_value = None
-        if 'auto_update' in payload:
-            if not isinstance(payload['auto_update'], bool):
-                self._send_json_response(400, {
-                    'error': 'bad_request',
-                    'message': 'auto_update must be a boolean',
-                })
-                return
-            auto_update_value = payload['auto_update']
-
-        channel_value = None
-        if 'channel' in payload:
-            channel = str(payload['channel']).strip().lower()
-            if channel != 'stable':
-                self._send_json_response(400, {
-                    'error': 'bad_request',
-                    'message': 'Only stable channel is allowed',
-                })
-                return
-            channel_value = channel
-
-        schedule_value = None
-        if 'schedule_utc' in payload:
-            schedule = str(payload['schedule_utc']).strip()
-            if not _SCHEDULE_HHMM_RE.match(schedule):
-                self._send_json_response(400, {
-                    'error': 'bad_request',
-                    'message': 'schedule_utc must be in HH:MM 24-hour format (UTC)',
-                })
-                return
-            schedule_value = schedule
-
-        if auto_update_value is not None:
-            os.environ['AUTO_UPDATE'] = 'true' if auto_update_value else 'false'
-        if channel_value is not None:
-            os.environ['AUTO_UPDATE_CHANNEL'] = channel_value
-        if schedule_value is not None:
-            os.environ['AUTO_UPDATE_SCHEDULE_UTC'] = schedule_value
-
-        persisted = persist_update_config(
-            auto_update=auto_update_value,
-            channel=channel_value,
-            schedule_utc=schedule_value,
-        )
-        response = get_update_config()
-        response['persisted'] = persisted
-        self._send_json_response(200, response)
 
     def handle_control_arm(self):
         """Handle POST /control/arm endpoint."""

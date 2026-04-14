@@ -967,7 +967,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (!response.ok) {{
                     throw new Error(data.message || data.error || 'Failed to save update settings');
                 }}
-                showUpdateAlert('Auto-update settings saved.', 'success');
+                if (data && data.persisted === false) {{
+                    showUpdateAlert(
+                        'Auto-update settings applied, but could not be written to config.env. Changes may be lost after reboot.',
+                        'error'
+                    );
+                }} else {{
+                    showUpdateAlert('Auto-update settings saved.', 'success');
+                }}
                 await loadUpdateConfig();
             }} catch (error) {{
                 showUpdateAlert('Could not save update settings: ' + error.message, 'error');
