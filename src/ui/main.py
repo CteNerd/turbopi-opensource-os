@@ -218,6 +218,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <p class="info">Current wake word: <span id="currentWakeWord" class="current-value">Loading...</span></p>
                 <p class="info">The wake word must contain only ASCII characters and cannot be empty.</p>
             </div>
+
+            <div class="form-group">
+                <label for="ttsPreviewText">TTS Preview Text:</label>
+                <input type="text" id="ttsPreviewText" value="System ready." placeholder="Enter text to speak">
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+                    <label for="ttsVolume">Volume</label>
+                    <input type="range" id="ttsVolume" min="0" max="100" value="80" oninput="updateTtsVolume()">
+                    <span id="ttsVolumeValue" class="current-value">80%</span>
+                    <label>
+                        <input type="checkbox" id="ttsMuted" onchange="updateTtsMute()">
+                        <span class="checkbox-label">Mute</span>
+                    </label>
+                    <button class="button button-secondary" onclick="previewTts()">Preview Speech</button>
+                </div>
+                <p class="info">Volume and mute controls affect UI playback of server-generated TTS audio.</p>
+            </div>
             
             <button class="button" onclick="saveWakeWordConfig()">Save Settings</button>
         </div>
@@ -326,6 +342,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let controlMaxLinear = 0.5;
         let controlMaxAngular = 1.2;
         let videoReconnectTimer = null;
+        let ttsVolume = 0.8;
+        let ttsMuted = false;
 
         // Load current wake word configuration on page load
         async function loadWakeWordConfig() {{
@@ -399,6 +417,50 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 setTimeout(() => {{
                     alertDiv.style.display = 'none';
                 }}, 3000);
+            }}
+        }}
+
+        function updateTtsVolume() {{
+            const slider = document.getElementById('ttsVolume');
+            const pct = Math.max(0, Math.min(100, parseInt(slider.value, 10) || 0));
+            ttsVolume = pct / 100.0;
+            document.getElementById('ttsVolumeValue').textContent = pct + '%';
+        }}
+
+        function updateTtsMute() {{
+            ttsMuted = document.getElementById('ttsMuted').checked;
+        }}
+
+        async function previewTts() {{
+            const text = document.getElementById('ttsPreviewText').value.trim();
+            if (!text) {{
+                showAlert('Preview text cannot be empty', 'error');
+                return;
+            }}
+
+            try {{
+                const response = await fetch(API_BASE + '/voice/tts', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ text: text }}),
+                }});
+
+                if (!response.ok) {{
+                    const message = await getApiErrorMessage(response, 'Failed to synthesize speech');
+                    showAlert(message, 'error');
+                    return;
+                }}
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                audio.volume = ttsVolume;
+                audio.muted = ttsMuted;
+                audio.onended = () => URL.revokeObjectURL(audioUrl);
+                await audio.play();
+                showAlert('Playing TTS preview', 'success');
+            }} catch (error) {{
+                showAlert('TTS preview failed: ' + error.message, 'error');
             }}
         }}
 
@@ -848,6 +910,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // Load configuration when page loads
         window.addEventListener('DOMContentLoaded', () => {{
             loadWakeWordConfig();
+            updateTtsVolume();
+            updateTtsMute();
             loadVersionInfo();
             connectControlSocket();
             setupJoystick();

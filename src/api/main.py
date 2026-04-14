@@ -59,6 +59,14 @@ except ImportError:
     COMMAND_PARSER_AVAILABLE = False
     logging.warning("Command intent parser not available")
 
+try:
+    from tts_provider import OpenAITTSProvider, TTSError
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    TTSError = Exception
+    logging.warning("TTS provider not available")
+
 
 SYSTEM_ACTION_DELAY_SECONDS = 0.5
 MJPEG_BOUNDARY = 'frame'
@@ -508,6 +516,10 @@ class APIHandler(BaseHTTPRequestHandler):
     _command_parser: Optional['CommandIntentParser'] = None
     _command_parser_lock = threading.Lock()
 
+    # Global TTS provider instance (shared across requests)
+    _tts_provider: Optional['OpenAITTSProvider'] = None
+    _tts_provider_lock = threading.Lock()
+
     # Global control arbiter for teleoperation
     _control_arbiter: Optional[ControlArbiter] = None
     _control_lock = threading.Lock()
@@ -548,6 +560,22 @@ class APIHandler(BaseHTTPRequestHandler):
                 cls._command_parser = CommandIntentParser()
                 logging.info("Command intent parser initialized")
             return cls._command_parser
+
+    @classmethod
+    def get_tts_provider(cls):
+        """Get or create TTS provider instance (singleton pattern)."""
+        if not TTS_AVAILABLE:
+            return None
+
+        api_key = os.environ.get('OPENAI_API_KEY', '').strip()
+        if not api_key:
+            return None
+
+        with cls._tts_provider_lock:
+            if cls._tts_provider is None:
+                cls._tts_provider = OpenAITTSProvider(api_key=api_key)
+                logging.info("OpenAI TTS provider initialized")
+            return cls._tts_provider
 
     @classmethod
     def get_control_arbiter(cls):
@@ -768,6 +796,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_stt()
         elif self.path == '/voice/command':
             self.handle_voice_command()
+        elif self.path == '/voice/tts':
+            self.handle_voice_tts()
         else:
             self.send_error(404, "Not Found")
 
@@ -1429,6 +1459,53 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logging.error(f"Voice command endpoint error: {str(e)}")
             self.send_error(500, "Internal Server Error: Unable to parse voice command")
+
+    def handle_voice_tts(self):
+        """Handle POST /voice/tts endpoint."""
+        try:
+            provider = self.get_tts_provider()
+            if provider is None:
+                self.send_error(503, "TTS service not configured")
+                return
+
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length <= 0:
+                self.send_error(400, "Request body is required")
+                return
+
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON in request body")
+                return
+
+            text = str(payload.get('text', '')).strip()
+            if not text:
+                self.send_error(400, "Missing required field: text")
+                return
+            if len(text) > 1000:
+                self.send_error(400, "Text is too long (max 1000 characters)")
+                return
+
+            voice = str(payload.get('voice', 'alloy')).strip() or 'alloy'
+
+            try:
+                audio_bytes = provider.synthesize(text, voice=voice)
+            except TTSError as exc:
+                logging.error("TTS synthesis error: %s", exc)
+                self.send_error(503, str(exc))
+                return
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'audio/mpeg')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', str(len(audio_bytes)))
+            self.end_headers()
+            self.wfile.write(audio_bytes)
+        except Exception as exc:
+            logging.error("TTS endpoint error: %s", exc)
+            self.send_error(500, "Internal Server Error: Unable to synthesize speech")
 
 
 def main():

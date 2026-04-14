@@ -789,13 +789,30 @@ paths:
   /voice/tts:
     post:
       summary: Text to speech
+      description: Server-side OpenAI TTS synthesis for UI audible feedback.
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [text]
               properties:
-                text: { type: string }
+                text:
+                  type: string
+                  description: Text to synthesize (max 1000 chars)
+                voice:
+                  type: string
+                  description: Optional OpenAI voice name
       responses:
         '200':
           description: Audio stream returned
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request (for example missing text)
+        '503':
+          description: TTS provider unavailable or not configured

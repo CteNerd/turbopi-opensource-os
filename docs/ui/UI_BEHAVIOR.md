@@ -38,6 +38,11 @@
 - FPS is visible in the UI during streaming
 - On stream error (for example API restart), UI automatically reconnects
 
+## Voice Settings Page
+- UI allows TTS preview text entry and playback test via POST /voice/tts
+- UI exposes volume slider and mute toggle for TTS playback
+- TTS volume/mute controls affect browser playback, not motor/safety control
+
 ## System Status Page
 - UI displays expanded health data from GET /health (uptime, temperature, memory, disk, services)
 - UI refreshes system status automatically while page is open
