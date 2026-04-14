@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Motor HAL primitives with safe startup and config-driven calibration."""
 
+import importlib
+import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import List, Optional, Set, Tuple
+
+
+logger = logging.getLogger(__name__)
 
 
 class MotorSafetyError(Exception):
@@ -21,6 +26,50 @@ def _get_float(name: str, default: float) -> float:
         return float(value)
     except ValueError:
         return default
+
+
+def _get_int(name: str, default: int) -> int:
+    """Read an integer from the environment with a safe default."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _get_bool(name: str, default: bool) -> bool:
+    """Read a bool from the environment with a safe default."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in ('1', 'true', 'yes', 'on'):
+        return True
+    if normalized in ('0', 'false', 'no', 'off'):
+        return False
+    return default
+
+
+def _get_int_set(name: str) -> Set[int]:
+    """Read a comma-separated list of ints from the environment."""
+    value = os.environ.get(name, '').strip()
+    if not value:
+        return set()
+
+    result: Set[int] = set()
+    for token in value.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            result.add(int(token))
+        except ValueError:
+            logger.warning('Ignoring invalid integer token for %s: %s', name, token)
+    return result
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -151,3 +200,94 @@ class SimulatedMotorHAL(BaseMotorHAL):
     def _apply_outputs(self, left_output: float, right_output: float) -> None:
         """Record motor outputs for tests and higher-level control integration."""
         self.applied_outputs.append((left_output, right_output))
+
+
+class HiwonderTurboPiMotorHAL(BaseMotorHAL):
+    """Hardware-backed motor HAL for the Hiwonder TurboPi vendor SDK.
+
+    This adapter preserves the existing left/right control contract from the
+    control arbiter and maps it to four motor channels using the vendor-proven
+    sign convention:
+    - channel 1: left side, inverted
+    - channel 2: right side, non-inverted
+    - channel 3: left side, inverted
+    - channel 4: right side, non-inverted
+    """
+
+    def __init__(
+        self,
+        calibration: Optional[MotorCalibration] = None,
+        board=None,
+        max_duty: Optional[int] = None,
+        disabled_channels: Optional[Set[int]] = None,
+        block_on_disabled_channels: Optional[bool] = None,
+    ):
+        super().__init__(calibration=calibration)
+        self.board = board or self._build_vendor_board()
+        self.max_duty = max(1, min(max_duty if max_duty is not None else _get_int('HAL_MOTOR_MAX_DUTY', 35), 100))
+        self.disabled_channels = disabled_channels if disabled_channels is not None else _get_int_set('HAL_MOTOR_DISABLED_CHANNELS')
+        self.block_on_disabled_channels = (
+            block_on_disabled_channels
+            if block_on_disabled_channels is not None
+            else _get_bool('HAL_MOTOR_BLOCK_ON_DISABLED_CHANNELS', True)
+        )
+        self.applied_channel_outputs: List[List[int]] = []
+
+    def _build_vendor_board(self):
+        """Create a vendor board SDK instance with a clear error message."""
+        try:
+            sdk = importlib.import_module('HiwonderSDK.ros_robot_controller_sdk')
+            return sdk.Board()
+        except Exception as exc:  # pragma: no cover - depends on target hardware environment
+            raise MotorSafetyError('Vendor motor SDK unavailable') from exc
+
+    def _apply_outputs(self, left_output: float, right_output: float) -> None:
+        """Apply left/right commands to the four vendor motor channels."""
+        duty_by_channel = {
+            1: int(round((-left_output) * self.max_duty)),
+            2: int(round(right_output * self.max_duty)),
+            3: int(round((-left_output) * self.max_duty)),
+            4: int(round(right_output * self.max_duty)),
+        }
+
+        unhealthy_channels = sorted(
+            ch for ch in self.disabled_channels if abs(duty_by_channel.get(ch, 0)) > 0
+        )
+        if unhealthy_channels and self.block_on_disabled_channels:
+            raise MotorSafetyError(
+                f'Motor channel(s) disabled by configuration: {unhealthy_channels}'
+            )
+
+        if unhealthy_channels:
+            logger.warning(
+                'Applying zero duty to disabled motor channel(s): %s',
+                unhealthy_channels,
+            )
+            for channel in unhealthy_channels:
+                duty_by_channel[channel] = 0
+
+        data = [[channel, duty_by_channel[channel]] for channel in (1, 2, 3, 4)]
+        try:
+            self.board.set_motor_duty(data)
+        except Exception as exc:
+            raise MotorSafetyError('Motor driver write failed') from exc
+
+        self.applied_channel_outputs.append([duty_by_channel[1], duty_by_channel[2], duty_by_channel[3], duty_by_channel[4]])
+
+
+def create_motor_hal_from_env() -> BaseMotorHAL:
+    """Create a motor HAL based on runtime configuration.
+
+    HAL_MOTOR_BACKEND options:
+    - sim: deterministic simulation backend (default)
+    - vendor: Hiwonder vendor SDK backend with fallback to simulation
+    """
+    backend = os.environ.get('HAL_MOTOR_BACKEND', 'sim').strip().lower()
+    if backend == 'vendor':
+        try:
+            return HiwonderTurboPiMotorHAL()
+        except MotorSafetyError:
+            logger.warning('Falling back to SimulatedMotorHAL because vendor backend is unavailable')
+            return SimulatedMotorHAL()
+
+    return SimulatedMotorHAL()

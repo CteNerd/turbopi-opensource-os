@@ -8,7 +8,24 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from hal.motor import MotorCalibration, MotorSafetyError, SimulatedMotorHAL, VelocityCommand
+from hal.motor import (
+    HiwonderTurboPiMotorHAL,
+    MotorCalibration,
+    MotorSafetyError,
+    SimulatedMotorHAL,
+    VelocityCommand,
+    create_motor_hal_from_env,
+)
+
+
+class FakeBoard:
+    """Test double for vendor board interface."""
+
+    def __init__(self):
+        self.calls = []
+
+    def set_motor_duty(self, data):
+        self.calls.append(data)
 
 
 class TestMotorCalibration(unittest.TestCase):
@@ -69,6 +86,49 @@ class TestMotorCalibration(unittest.TestCase):
 
         self.assertEqual(hal.get_state().left_output, 0.0)
         self.assertEqual(hal.get_state().right_output, 0.0)
+
+    def test_vendor_hal_maps_outputs_to_channels_with_expected_signs(self):
+        board = FakeBoard()
+        hal = HiwonderTurboPiMotorHAL(board=board, max_duty=50)
+        hal.arm()
+
+        hal.set_velocity(VelocityCommand(linear_mps=0.25, angular_rps=0.0))
+
+        # Forward command should drive all channels with vendor sign convention.
+        self.assertEqual(board.calls[-1], [[1, -25], [2, 25], [3, -25], [4, 25]])
+
+    def test_vendor_hal_blocks_nonzero_output_on_disabled_channel(self):
+        board = FakeBoard()
+        hal = HiwonderTurboPiMotorHAL(
+            board=board,
+            max_duty=50,
+            disabled_channels={3},
+            block_on_disabled_channels=True,
+        )
+        hal.arm()
+
+        with self.assertRaises(MotorSafetyError):
+            hal.set_velocity(VelocityCommand(linear_mps=0.2, angular_rps=0.0))
+
+    def test_vendor_hal_zeroes_disabled_channel_when_non_blocking(self):
+        board = FakeBoard()
+        hal = HiwonderTurboPiMotorHAL(
+            board=board,
+            max_duty=50,
+            disabled_channels={3},
+            block_on_disabled_channels=False,
+        )
+        hal.arm()
+
+        hal.set_velocity(VelocityCommand(linear_mps=0.2, angular_rps=0.0))
+        self.assertEqual(board.calls[-1], [[1, -20], [2, 20], [3, 0], [4, 20]])
+
+    def test_factory_returns_sim_when_vendor_backend_unavailable(self):
+        with patch.dict(os.environ, {'HAL_MOTOR_BACKEND': 'vendor'}, clear=False):
+            with patch('hal.motor.HiwonderTurboPiMotorHAL', side_effect=MotorSafetyError('unavailable')):
+                hal = create_motor_hal_from_env()
+
+        self.assertIsInstance(hal, SimulatedMotorHAL)
 
 
 if __name__ == '__main__':

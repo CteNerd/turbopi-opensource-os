@@ -142,3 +142,19 @@ These instructions apply to Copilot Chat, Copilot code review, and tasks assigne
 - 5-minute review gate before merge: wait for Copilot review comments to arrive before attempting merge.
 - Address all unresolved threads before merging; use targeted minimal fixes and concise replies to minimize review cycles.
 - After merge, automatically proceed to next epic: autonomous execution until user requests pause or direction change.
+
+## 13) Hardware evidence intake workflow (TurboPi kits)
+- For hardware readiness tasks, prioritize vendor evidence in this order:
+  1) Downloaded tutorial/manual bundles (for example `1. Tutorials`, `2. Software Tools`, `3. Source  Code & System Image`)
+  2) Vendor board-introduction PDFs and pinout/controller docs
+  3) Public marketing pages (lowest authority)
+- Do not infer pin mappings, motor channel ordering, or servo limits without explicit manual evidence.
+- If source/image folders contain only notice documents (for example `Important Notice 25.pdf`), treat firmware/source as restricted and continue with user-provided assets plus available manuals.
+- When hardware evidence is gathered, update `docs/init/HIWONDER_TURBOPI_READINESS_PLAN.md` with:
+  - verified facts
+  - missing facts
+  - next safe implementation steps
+- For control-related bring-up, preserve existing safety contracts:
+  - disarmed-by-default
+  - E-STOP precedence
+  - disconnect/deadman STOP behavior

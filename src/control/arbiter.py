@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from control.behavior import BehaviorCommand
-from hal.motor import MotorSafetyError, SimulatedMotorHAL, VelocityCommand
+from hal.motor import MotorSafetyError, VelocityCommand, create_motor_hal_from_env
 
 
 def _get_float(name: str, default: float) -> float:
@@ -70,7 +70,7 @@ class ControlArbiter:
     """Arbiter that enforces safety before forwarding commands to motor HAL."""
 
     def __init__(self, motor_hal=None):
-        self.motor_hal = motor_hal or SimulatedMotorHAL()
+        self.motor_hal = motor_hal or create_motor_hal_from_env()
         self.max_linear_speed = max(_get_float('MAX_LINEAR_SPEED', 0.5), 0.01)
         self.max_angular_speed = max(_get_float('MAX_ANGULAR_SPEED', 1.2), 0.01)
         self.deadman_timeout_s = max(_get_int('DEADMAN_TIMEOUT_MS', 500), 1) / 1000.0
