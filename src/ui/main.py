@@ -280,6 +280,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <button class="button button-danger" onclick="engageEstop()">E-Stop</button>
                 <button class="button button-secondary" onclick="resetEstop()">Reset E-Stop</button>
             </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px; align-items:center;">
+                <label for="followTargetId" style="font-weight:600;">Follow Target ID</label>
+                <input id="followTargetId" type="number" min="1" value="1" style="width:90px; padding:8px; border:1px solid #d0d7de; border-radius:6px;" />
+                <button class="button" onclick="startFollow()">Start Follow</button>
+                <button class="button button-secondary" onclick="stopFollow()">Stop Follow</button>
+            </div>
             <div class="joystick-wrap">
                 <div id="joystickPad" class="joystick-pad">
                     <div id="joystickKnob" class="joystick-knob"></div>
@@ -289,6 +295,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <p>Armed: <span id="armedValue" class="current-value">no</span></p>
                     <p>E-Stop Latched: <span id="estopValue" class="current-value">no</span></p>
                     <p>Deadman Triggered: <span id="deadmanValue" class="current-value">no</span></p>
+                    <p>Follow Enabled: <span id="followEnabledValue" class="current-value">no</span></p>
+                    <p>Follow Lost Target: <span id="followLostValue" class="current-value">no</span></p>
                     <p>Drive Linear: <span id="linearValue" class="current-value">0.00</span> m/s</p>
                     <p>Drive Angular: <span id="angularValue" class="current-value">0.00</span> rad/s</p>
                     <p class="info">Disconnect or missing heartbeat triggers immediate STOP.</p>
@@ -533,6 +541,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             await refreshControlState();
         }}
 
+        async function startFollow() {{
+            const targetInput = document.getElementById('followTargetId');
+            const rawTarget = parseInt(targetInput.value, 10);
+            const payload = Number.isFinite(rawTarget) && rawTarget > 0
+                ? {{ target_id: rawTarget }}
+                : {{}};
+
+            const response = await fetch(API_BASE + '/control/follow/start', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(payload),
+            }});
+            const data = await parseApiPayload(response);
+            if (!response.ok) {{
+                showControlAlert(data.message || 'Failed to start follow mode', 'error');
+                return;
+            }}
+            showControlAlert('Follow mode started', 'success');
+            await refreshControlState();
+        }}
+
+        async function stopFollow() {{
+            const response = await fetch(API_BASE + '/control/follow/stop', {{ method: 'POST' }});
+            const data = await parseApiPayload(response);
+            if (!response.ok) {{
+                showControlAlert(data.message || 'Failed to stop follow mode', 'error');
+                return;
+            }}
+            showControlAlert('Follow mode stopped', 'success');
+            await refreshControlState();
+        }}
+
         function connectControlSocket() {{
             controlSocket = new WebSocket(WS_BASE + CONTROL_WS_PATH);
             controlSocket.onopen = () => {{
@@ -630,6 +670,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 }}
                 if (typeof data.max_angular_speed === 'number') {{
                     controlMaxAngular = data.max_angular_speed;
+                }}
+
+                const followResponse = await fetch(API_BASE + '/control/follow/state');
+                if (followResponse.ok) {{
+                    const followData = await followResponse.json();
+                    document.getElementById('followEnabledValue').textContent = followData.enabled ? 'yes' : 'no';
+                    document.getElementById('followLostValue').textContent = followData.lost_target ? 'yes' : 'no';
                 }}
             }} catch (error) {{
                 // Keep UI responsive when API is restarting.

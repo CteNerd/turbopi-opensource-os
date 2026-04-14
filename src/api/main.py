@@ -37,7 +37,7 @@ except Exception as exc:
 
 # Add control/HAL imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from control import ControlArbiter, ControlWebSocketBridge
+from control import ControlArbiter, ControlWebSocketBridge, FollowBehavior, TargetObservation
 from hal import CameraError, FakeCameraHAL
 
 # Import wake word engine and command parser (add path for imports)
@@ -519,6 +519,11 @@ class APIHandler(BaseHTTPRequestHandler):
     _video_frames_total = 0
     _video_last_frame_ts = 0.0
     _video_fps = 0.0
+
+    # Global follow behavior runtime
+    _follow_behavior: Optional[FollowBehavior] = None
+    _follow_lock = threading.Lock()
+    _follow_thread_started = False
     
     @classmethod
     def get_wake_word_engine(cls):
@@ -564,6 +569,35 @@ class APIHandler(BaseHTTPRequestHandler):
             elif not cls._camera_hal.is_open():
                 cls._camera_hal.open()
             return cls._camera_hal
+
+    @classmethod
+    def get_follow_behavior(cls):
+        """Get or create follow behavior singleton and runtime loop."""
+        with cls._follow_lock:
+            if cls._follow_behavior is None:
+                cls._follow_behavior = FollowBehavior()
+                logging.info("Follow behavior initialized")
+
+            if not cls._follow_thread_started:
+                thread = threading.Thread(target=cls._run_follow_loop, daemon=True)
+                thread.start()
+                cls._follow_thread_started = True
+                logging.info("Follow behavior runtime loop started")
+
+            return cls._follow_behavior
+
+    @classmethod
+    def _run_follow_loop(cls) -> None:
+        """Apply follow behavior autonomy commands on a fixed cadence."""
+        while True:
+            behavior = cls.get_follow_behavior()
+            command = behavior.next_command()
+            if command is not None:
+                result = cls.get_control_arbiter().apply_autonomy(command)
+                if result.get('status') == 'blocked':
+                    # Safety states (for example E-Stop) disable follow immediately.
+                    behavior.stop()
+            time.sleep(0.1)
 
     @classmethod
     def record_video_frame(cls) -> None:
@@ -687,6 +721,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_health()
         elif path == '/control/state':
             self.handle_control_state()
+        elif path == '/control/follow/state':
+            self.handle_control_follow_state()
         elif path == '/system/version':
             self.handle_system_version()
         elif path == '/updates/check':
@@ -716,6 +752,12 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_control_estop()
         elif self.path == '/control/estop/reset':
             self.handle_control_estop_reset()
+        elif self.path == '/control/follow/start':
+            self.handle_control_follow_start()
+        elif self.path == '/control/follow/stop':
+            self.handle_control_follow_stop()
+        elif self.path == '/control/follow/observation':
+            self.handle_control_follow_observation()
         elif self.path == '/system/restart':
             self.handle_system_restart()
         elif self.path == '/system/reboot':
@@ -868,6 +910,7 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle POST /control/disarm endpoint."""
         if not self._require_ui_origin():
             return
+        self.get_follow_behavior().stop()
         arbiter = self.get_control_arbiter()
         self._send_json_response(200, arbiter.disarm())
 
@@ -875,6 +918,7 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle POST /control/estop endpoint."""
         if not self._require_ui_origin():
             return
+        self.get_follow_behavior().stop()
         arbiter = self.get_control_arbiter()
         self._send_json_response(200, arbiter.engage_estop())
 
@@ -889,6 +933,88 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle GET /control/state endpoint."""
         arbiter = self.get_control_arbiter()
         self._send_json_response(200, arbiter.get_state().to_dict())
+
+    def handle_control_follow_state(self):
+        """Handle GET /control/follow/state endpoint."""
+        follow = self.get_follow_behavior()
+        self._send_json_response(200, follow.state())
+
+    def handle_control_follow_start(self):
+        """Handle POST /control/follow/start endpoint."""
+        if not self._require_ui_origin():
+            return
+
+        target_id = None
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 0:
+            try:
+                body = self.rfile.read(content_length).decode('utf-8')
+                payload = json.loads(body)
+                if 'target_id' in payload and payload['target_id'] is not None:
+                    target_id = int(payload['target_id'])
+                    if target_id < 1:
+                        raise ValueError('target_id must be >= 1')
+            except (json.JSONDecodeError, ValueError, TypeError):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Invalid follow start payload. Optional target_id must be a positive integer.',
+                })
+                return
+
+        follow = self.get_follow_behavior()
+        self._send_json_response(200, follow.start(target_id=target_id))
+
+    def handle_control_follow_stop(self):
+        """Handle POST /control/follow/stop endpoint."""
+        if not self._require_ui_origin():
+            return
+
+        follow = self.get_follow_behavior()
+        follow.stop()
+        self.get_control_arbiter().stop()
+        self._send_json_response(200, {'status': 'stopped'})
+
+    def handle_control_follow_observation(self):
+        """Handle POST /control/follow/observation endpoint."""
+        if not self._require_ui_origin():
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length <= 0:
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'Request body is required.',
+            })
+            return
+
+        try:
+            payload = json.loads(self.rfile.read(content_length).decode('utf-8'))
+            target_id = int(payload['target_id'])
+            center_x = float(payload['center_x'])
+            area = float(payload['area'])
+            if target_id < 1:
+                raise ValueError('target_id must be >= 1')
+            if not (0.0 <= center_x <= 1.0):
+                raise ValueError('center_x must be in [0.0, 1.0]')
+            if not (0.0 <= area <= 1.0):
+                raise ValueError('area must be in [0.0, 1.0]')
+        except (KeyError, ValueError, TypeError, json.JSONDecodeError):
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'Payload must include target_id (int), center_x [0..1], area [0..1].',
+            })
+            return
+
+        follow = self.get_follow_behavior()
+        accepted = follow.update_observation(
+            TargetObservation(
+                target_id=target_id,
+                center_x=center_x,
+                area=area,
+                timestamp=time.monotonic(),
+            )
+        )
+        self._send_json_response(200, {'status': 'accepted' if accepted else 'ignored'})
 
     def handle_video_stream(self, query: str):
         """Handle GET /video/stream endpoint with multipart MJPEG output."""
