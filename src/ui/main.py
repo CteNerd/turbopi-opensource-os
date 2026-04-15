@@ -1069,6 +1069,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function positionKnobByNormalized(pad, knob, normX, normY) {{
             const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
             const radius = center;
+            if (radius <= 0) {{
+                knob.style.left = Math.max(0, center) + 'px';
+                knob.style.top = Math.max(0, center) + 'px';
+                return;
+            }}
             const clampedX = Math.max(-1, Math.min(normX, 1));
             const clampedY = Math.max(-1, Math.min(normY, 1));
             knob.style.left = (center + (clampedX * radius)) + 'px';
@@ -1134,13 +1139,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             sendHeadCommand(0, 0, true);
         }}
 
-        function stopJoystick(padId = 'joystickPad', knobId = 'joystickKnob') {{
+        function centerDriveKnob(padId, knobId) {{
             const _pad = document.getElementById(padId);
             const _knob = document.getElementById(knobId);
             if (!_pad || !_knob) return;
             const _c = Math.floor((_pad.offsetWidth - _knob.offsetWidth) / 2);
-            _knob.style.left = _c + 'px';
-            _knob.style.top = _c + 'px';
+            _knob.style.left = Math.max(0, _c) + 'px';
+            _knob.style.top = Math.max(0, _c) + 'px';
+        }}
+
+        function stopJoystick(padId = null, knobId = null) {{
+            if (padId && knobId) {{
+                centerDriveKnob(padId, knobId);
+            }} else {{
+                centerDriveKnob('joystickPad', 'joystickKnob');
+                centerDriveKnob('driveOverlayPad', 'driveOverlayKnob');
+            }}
             if (controlSocket && controlSocket.readyState === WebSocket.OPEN) {{
                 controlSocket.send(JSON.stringify({{ type: 'stop' }}));
             }}
@@ -1157,6 +1171,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             function updateFromEvent(event) {{
                 const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
                 const radius = center;
+                if (radius <= 0) {{
+                    return;
+                }}
                 const rect = pad.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
@@ -1209,6 +1226,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             function mapToHead(event) {{
                 const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
                 const radius = center;
+                if (radius <= 0) {{
+                    return;
+                }}
                 const rect = pad.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
@@ -1296,7 +1316,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (typeof data.head_tilt_deg === 'number') {{
                     tiltSlider.value = data.head_tilt_deg;
                 }}
-                setHeadDisplay(parseFloat(panSlider.value) || 0, parseFloat(tiltSlider.value) || 0);
+                updateHeadFromSliders(false);
                 if (typeof data.max_linear_speed === 'number') {{
                     controlMaxLinear = data.max_linear_speed;
                 }}
