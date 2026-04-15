@@ -112,3 +112,67 @@ class FakeCameraHAL(BaseCameraHAL):
             pixel_format=self.calibration.pixel_format,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
+
+
+class OpenCVCameraHAL(BaseCameraHAL):
+    """OpenCV camera backend that returns JPEG-encoded frames for MJPEG streaming."""
+
+    def __init__(self, calibration: Optional[CameraCalibration] = None, device_index: int = -1):
+        super().__init__(calibration=calibration)
+        self.device_index = device_index
+        self._capture = None
+
+    def open(self) -> None:
+        """Open camera device via OpenCV and apply basic calibration hints."""
+        try:
+            import cv2  # type: ignore
+        except Exception as exc:
+            raise CameraError('OpenCV (cv2) not available') from exc
+
+        capture = cv2.VideoCapture(self.device_index)
+        if not capture or not capture.isOpened():
+            raise CameraError(f'Failed to open camera device index {self.device_index}')
+
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, float(self.calibration.width))
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(self.calibration.height))
+        capture.set(cv2.CAP_PROP_FPS, float(self.calibration.fps))
+
+        self._capture = capture
+        self._opened = True
+
+    def close(self) -> None:
+        """Release camera capture resources."""
+        if self._capture is not None:
+            try:
+                self._capture.release()
+            except Exception:
+                pass
+        self._capture = None
+        self._opened = False
+
+    def get_frame(self) -> CameraFrame:
+        """Capture and JPEG-encode one frame."""
+        if not self.is_open() or self._capture is None:
+            raise CameraError('Camera is not open')
+
+        ok, frame = self._capture.read()
+        if not ok or frame is None:
+            raise CameraError('Failed to read frame from camera')
+
+        try:
+            import cv2  # type: ignore
+        except Exception as exc:
+            raise CameraError('OpenCV (cv2) not available') from exc
+
+        encoded_ok, encoded = cv2.imencode('.jpg', frame)
+        if not encoded_ok:
+            raise CameraError('Failed to encode frame as JPEG')
+
+        height, width = frame.shape[:2]
+        return CameraFrame(
+            data=encoded.tobytes(),
+            width=width,
+            height=height,
+            pixel_format='jpeg',
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )

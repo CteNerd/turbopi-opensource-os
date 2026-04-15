@@ -18,6 +18,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{robot_name} Control Panel</title>
     <style>
         body {{
@@ -186,6 +187,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: #000;
             min-height: 240px;
             object-fit: contain;
+        }}
+
+        @media (max-width: 768px) {{
+            body {{
+                margin: 0;
+                padding: 12px;
+            }}
+            .container {{
+                padding: 16px;
+            }}
+            .joystick-wrap {{
+                justify-content: center;
+            }}
+            .joystick-pad {{
+                width: 200px;
+                height: 200px;
+            }}
+            .joystick-knob {{
+                left: 71px;
+                top: 71px;
+            }}
+            .video-frame {{
+                min-height: 180px;
+            }}
         }}
     </style>
 </head>
@@ -373,12 +398,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const CONTROL_WS_PATH = '/ws/control';
         const VIDEO_STREAM_PATH = '/video/stream';
         const VIDEO_STATS_PATH = '/video/stats';
+        const VIDEO_STREAM_SECONDS = 3600;
         let controlSocket = null;
         let heartbeatTimer = null;
+        let controlReconnectTimer = null;
         let dragActive = false;
         let controlMaxLinear = 0.5;
         let controlMaxAngular = 1.2;
         let videoReconnectTimer = null;
+        let videoIdlePolls = 0;
         let ttsVolume = 0.8;
         let ttsMuted = false;
 
@@ -766,20 +794,66 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             await refreshControlState();
         }}
 
+        function scheduleControlReconnect() {{
+            if (controlReconnectTimer) return;
+            controlReconnectTimer = setTimeout(() => {{
+                controlReconnectTimer = null;
+                connectControlSocket();
+            }}, 1000);
+        }}
+
         function connectControlSocket() {{
-            controlSocket = new WebSocket(WS_BASE + CONTROL_WS_PATH);
-            controlSocket.onopen = () => {{
+            if (controlSocket && (controlSocket.readyState === WebSocket.OPEN || controlSocket.readyState === WebSocket.CONNECTING)) {{
+                return;
+            }}
+
+            const socket = new WebSocket(WS_BASE + CONTROL_WS_PATH);
+            controlSocket = socket;
+
+            socket.onopen = () => {{
+                if (controlSocket !== socket) return;
                 document.getElementById('wsStatus').textContent = 'connected';
+                if (controlReconnectTimer) {{
+                    clearTimeout(controlReconnectTimer);
+                    controlReconnectTimer = null;
+                }}
+                if (heartbeatTimer) clearInterval(heartbeatTimer);
                 heartbeatTimer = setInterval(() => {{
-                    if (controlSocket && controlSocket.readyState === WebSocket.OPEN) {{
-                        controlSocket.send(JSON.stringify({{ type: 'heartbeat' }}));
+                    if (controlSocket === socket && socket.readyState === WebSocket.OPEN) {{
+                        socket.send(JSON.stringify({{ type: 'heartbeat' }}));
                     }}
                 }}, 200);
             }};
-            controlSocket.onclose = () => {{
+
+            socket.onmessage = (event) => {{
+                if (controlSocket !== socket) return;
+                try {{
+                    const payload = JSON.parse(event.data);
+                    if (payload && payload.message === 'inactive_connection') {{
+                        if (socket.readyState === WebSocket.OPEN) {{
+                            socket.close();
+                        }}
+                        scheduleControlReconnect();
+                    }}
+                }} catch (error) {{
+                    // Ignore non-JSON websocket responses.
+                }}
+            }};
+
+            socket.onerror = () => {{
+                if (controlSocket !== socket) return;
+                document.getElementById('wsStatus').textContent = 'error';
+            }};
+
+            socket.onclose = () => {{
+                if (controlSocket !== socket) return;
                 document.getElementById('wsStatus').textContent = 'disconnected';
-                if (heartbeatTimer) clearInterval(heartbeatTimer);
-                setTimeout(connectControlSocket, 1000);
+                if (heartbeatTimer) {{
+                    clearInterval(heartbeatTimer);
+                    heartbeatTimer = null;
+                }}
+                controlSocket = null;
+                scheduleControlReconnect();
             }};
         }}
 
@@ -883,7 +957,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function startVideoStream() {{
             const img = document.getElementById('videoStream');
             const statusEl = document.getElementById('videoStatus');
-            const streamUrl = API_BASE + VIDEO_STREAM_PATH + '?seconds=20&t=' + Date.now();
+            const streamUrl = API_BASE + VIDEO_STREAM_PATH + '?seconds=' + VIDEO_STREAM_SECONDS + '&t=' + Date.now();
+            videoIdlePolls = 0;
             statusEl.textContent = 'connecting...';
             img.src = streamUrl;
         }}
@@ -907,7 +982,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     if (!response.ok) return;
                     const stats = await response.json();
                     fpsEl.textContent = (stats.fps || 0).toFixed(1);
-                    statusEl.textContent = stats.active ? 'live' : 'idle';
+                    if (stats.active) {{
+                        videoIdlePolls = 0;
+                        statusEl.textContent = 'live';
+                    }} else {{
+                        videoIdlePolls += 1;
+                        statusEl.textContent = 'idle';
+                        if (videoIdlePolls >= 3) {{
+                            videoIdlePolls = 0;
+                            startVideoStream();
+                        }}
+                    }}
                 }} catch (error) {{
                     statusEl.textContent = 'reconnecting...';
                 }}

@@ -25,7 +25,7 @@ import io
 import tarfile
 import tempfile
 from typing import Optional, Dict
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 
 try:
@@ -38,7 +38,7 @@ except Exception as exc:
 # Add control/HAL imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from control import ControlArbiter, ControlWebSocketBridge, FollowBehavior, TargetObservation
-from hal import CameraError, FakeCameraHAL
+from hal import CameraError, FakeCameraHAL, OpenCVCameraHAL
 
 # Import wake word engine and command parser (add path for imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'voice'))
@@ -764,9 +764,29 @@ class APIHandler(BaseHTTPRequestHandler):
         """Get or create camera HAL singleton used by MJPEG stream endpoint."""
         with cls._camera_lock:
             if cls._camera_hal is None:
-                cls._camera_hal = FakeCameraHAL()
-                cls._camera_hal.open()
-                logging.info("Camera HAL initialized for video stream")
+                backend = os.environ.get('HAL_CAMERA_BACKEND', 'auto').strip().lower()
+                if backend in ('auto', 'opencv'):
+                    try:
+                        device_index = int(os.environ.get('HAL_CAMERA_DEVICE', '-1'))
+                    except ValueError:
+                        device_index = -1
+
+                    try:
+                        cls._camera_hal = OpenCVCameraHAL(device_index=device_index)
+                        cls._camera_hal.open()
+                        logging.info('Camera HAL initialized using OpenCV backend (device=%s)', device_index)
+                    except CameraError as exc:
+                        if backend == 'opencv':
+                            logging.error('OpenCV camera backend requested but unavailable: %s', exc)
+                        else:
+                            logging.warning('OpenCV camera backend unavailable, falling back to fake camera: %s', exc)
+                        cls._camera_hal = FakeCameraHAL()
+                        cls._camera_hal.open()
+                        logging.info('Camera HAL initialized using fake backend')
+                else:
+                    cls._camera_hal = FakeCameraHAL()
+                    cls._camera_hal.open()
+                    logging.info('Camera HAL initialized using fake backend')
             elif not cls._camera_hal.is_open():
                 cls._camera_hal.open()
             return cls._camera_hal
@@ -1976,8 +1996,8 @@ def main():
 
     threading.Thread(target=run_websocket_server, daemon=True).start()
 
-    # Create and start HTTP server
-    server = HTTPServer((host, port), APIHandler)
+    # Use a threaded server so long-running stream handlers do not block all API routes.
+    server = ThreadingHTTPServer((host, port), APIHandler)
     
     try:
         server.serve_forever()

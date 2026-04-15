@@ -4,6 +4,7 @@
 import importlib
 import logging
 import os
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
@@ -261,9 +262,26 @@ class HiwonderTurboPiMotorHAL(BaseMotorHAL):
     def _build_vendor_board(self):
         """Create a vendor board SDK instance with a clear error message."""
         try:
+            # Add common HiwonderSDK search paths for both dev and prod environments
+            sdk_search_paths = [
+                '/opt/turbopi/current',  # Production: systemd service working directory
+                '/home/pi/TurboPi',       # Development: vendor image default location
+            ]
+            for path in sdk_search_paths:
+                if path not in sys.path:
+                    sys.path.insert(0, path)
+            
+            logger.debug('Attempting to import HiwonderSDK from sys.path: %s', sys.path[:3])
             sdk = importlib.import_module('HiwonderSDK.ros_robot_controller_sdk')
-            return sdk.Board()
-        except Exception as exc:  # pragma: no cover - depends on target hardware environment
+            logger.debug('Successfully imported HiwonderSDK')
+            board = sdk.Board()
+            logger.debug('Successfully instantiated Board()')
+            return board
+        except ModuleNotFoundError as exc:
+            logger.error('HiwonderSDK module not found in search paths. sys.path: %s', sys.path[:5])
+            raise MotorSafetyError('Vendor motor SDK module not found') from exc
+        except Exception as exc:
+            logger.error('Failed to initialize vendor motor SDK: %s: %s', type(exc).__name__, exc)
             raise MotorSafetyError('Vendor motor SDK unavailable') from exc
 
     def backend_name(self) -> str:

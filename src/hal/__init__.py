@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hardware Abstraction Layer exports for TurboPi OpenSource OS."""
 
-from .camera import CameraCalibration, CameraError, CameraFrame, FakeCameraHAL
+from .camera import CameraCalibration, CameraError, CameraFrame, FakeCameraHAL, OpenCVCameraHAL
 from .motor import (
     BaseMotorHAL,
     HiwonderTurboPiMotorHAL,
@@ -19,6 +19,7 @@ __all__ = [
     'CameraError',
     'CameraFrame',
     'FakeCameraHAL',
+    'OpenCVCameraHAL',
     'BaseMotorHAL',
     'HiwonderTurboPiMotorHAL',
     'MotorCalibration',

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Safety-aware control arbiter for manual teleoperation."""
 
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -8,6 +9,9 @@ from typing import Dict, List, Optional
 
 from control.behavior import BehaviorCommand
 from hal.motor import MotorSafetyError, VelocityCommand, create_motor_hal_from_env
+
+
+logger = logging.getLogger(__name__)
 
 
 def _get_float(name: str, default: float) -> float:
@@ -137,7 +141,7 @@ class ControlArbiter:
         try:
             self.motor_hal.disarm()
         except MotorSafetyError as exc:
-            logging.error('Motor disarm failed: %s', exc)
+            logger.error('Motor disarm failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
@@ -149,7 +153,7 @@ class ControlArbiter:
         try:
             self.motor_hal.disarm()
         except MotorSafetyError as exc:
-            logging.error('Motor disarm during E-Stop failed: %s', exc)
+            logger.error('Motor disarm during E-Stop failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
@@ -164,6 +168,9 @@ class ControlArbiter:
     def heartbeat(self) -> None:
         """Record liveness signal from active control client."""
         self.last_heartbeat = time.monotonic()
+        # Clear deadman trigger when heartbeat is received (safety re-enabled)
+        if self.deadman_triggered:
+            self.deadman_triggered = False
 
     def apply_drive(self, linear_mps: float, angular_rps: float) -> Dict[str, object]:
         """Validate and route manual drive command through motor HAL."""
@@ -229,7 +236,7 @@ class ControlArbiter:
         try:
             self.motor_hal.stop()
         except MotorSafetyError as exc:
-            logging.error('Motor stop failed: %s', exc)
+            logger.error('Motor stop failed: %s', exc)
         self.last_linear = 0.0
         self.last_angular = 0.0
         self.autonomy_command = None
