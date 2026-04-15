@@ -11,6 +11,8 @@ from unittest.mock import patch, MagicMock
 from apply import (
     get_symlink_target,
     atomic_symlink_update,
+    sync_systemd_units_from_release,
+    restore_systemd_units,
     restart_services,
     switch_to_release,
     rollback_to_previous,
@@ -132,8 +134,89 @@ class TestRestartServices(unittest.TestCase):
         result = restart_services()
         
         self.assertFalse(result)
-        # Should stop after first failure
-        self.assertEqual(mock_run.call_count, 1)
+
+
+class TestSystemdUnitSync(unittest.TestCase):
+    """Tests for release-driven systemd unit sync and rollback"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.release_dir = os.path.join(self.temp_dir, 'release')
+        self.release_systemd = os.path.join(self.release_dir, 'systemd')
+        self.systemd_dir = os.path.join(self.temp_dir, 'etc-systemd')
+        os.makedirs(self.release_systemd)
+        os.makedirs(self.systemd_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @patch('subprocess.run')
+    def test_sync_systemd_units_from_release_success(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stderr='')
+
+        # Existing destination content should be backed up.
+        dst_api = os.path.join(self.systemd_dir, 'turbopi-api.service')
+        with open(dst_api, 'w') as f:
+            f.write('old-api')
+
+        src_api = os.path.join(self.release_systemd, 'turbopi-api.service')
+        src_ui = os.path.join(self.release_systemd, 'turbopi-ui.service')
+        with open(src_api, 'w') as f:
+            f.write('new-api')
+        with open(src_ui, 'w') as f:
+            f.write('new-ui')
+
+        backups = sync_systemd_units_from_release(
+            self.release_dir,
+            systemd_dir=self.systemd_dir
+        )
+
+        self.assertIn(dst_api, backups)
+        self.assertEqual(backups[dst_api], b'old-api')
+
+        dst_ui = os.path.join(self.systemd_dir, 'turbopi-ui.service')
+        self.assertIn(dst_ui, backups)
+        self.assertIsNone(backups[dst_ui])
+
+        with open(dst_api, 'r') as f:
+            self.assertEqual(f.read(), 'new-api')
+        with open(dst_ui, 'r') as f:
+            self.assertEqual(f.read(), 'new-ui')
+
+    @patch('subprocess.run')
+    def test_restore_systemd_units_success(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stderr='')
+
+        dst_api = os.path.join(self.systemd_dir, 'turbopi-api.service')
+        dst_ui = os.path.join(self.systemd_dir, 'turbopi-ui.service')
+        with open(dst_api, 'w') as f:
+            f.write('new-api')
+        with open(dst_ui, 'w') as f:
+            f.write('new-ui')
+
+        backups = {
+            dst_api: b'old-api',
+            dst_ui: None,
+        }
+
+        restore_systemd_units(backups)
+
+        with open(dst_api, 'r') as f:
+            self.assertEqual(f.read(), 'old-api')
+        self.assertFalse(os.path.exists(dst_ui))
+
+    @patch('subprocess.run')
+    def test_sync_systemd_units_missing_payload(self, mock_run):
+        empty_release_dir = os.path.join(self.temp_dir, 'release-no-systemd')
+        os.makedirs(empty_release_dir)
+
+        backups = sync_systemd_units_from_release(
+            empty_release_dir,
+            systemd_dir=self.systemd_dir
+        )
+
+        self.assertEqual(backups, {})
+        mock_run.assert_not_called()
     
     @patch('subprocess.run')
     def test_restart_services_timeout(self, mock_run):
@@ -491,16 +574,20 @@ class TestApplyUpdate(unittest.TestCase):
     @patch('apply.download_and_verify')
     @patch('apply.install_release')
     @patch('apply.switch_to_release')
+    @patch('apply.sync_systemd_units_from_release')
     @patch('apply.restart_services')
     @patch('apply.verify_release_health')
     @patch('apply.rollback_to_previous')
+    @patch('apply.restore_systemd_units')
     @patch('apply.update_metadata_health_status')
     def test_apply_update_restart_failure_rollback(
         self,
         mock_update_meta,
+        mock_restore_units,
         mock_rollback,
         mock_health,
         mock_restart,
+        mock_sync_units,
         mock_switch,
         mock_install,
         mock_download
@@ -509,6 +596,7 @@ class TestApplyUpdate(unittest.TestCase):
         # Setup mocks
         mock_install.return_value = '/opt/turbopi/releases/0.1.0'
         mock_switch.return_value = ('/opt/turbopi/releases/0.0.9', None)
+        mock_sync_units.return_value = {'/etc/systemd/system/turbopi-api.service': b'old'}
         
         # First restart (after switch) fails, second (after rollback) succeeds
         mock_restart.side_effect = [False, True]
@@ -531,6 +619,11 @@ class TestApplyUpdate(unittest.TestCase):
             '/opt/turbopi/releases/0.0.9',
             None,
             '/opt/turbopi'
+        )
+
+        # Verify unit restore was attempted before rollback restart.
+        mock_restore_units.assert_called_once_with(
+            {'/etc/systemd/system/turbopi-api.service': b'old'}
         )
         
         # Verify restart was called twice

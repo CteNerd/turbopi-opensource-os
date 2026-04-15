@@ -18,9 +18,10 @@ See [RELEASE_INSTALL_LAYOUT.md](./RELEASE_INSTALL_LAYOUT.md) for complete direct
 3. Verify checksum
 4. Extract to releases/<version>
 5. Update symlink atomically
-6. Restart services
-7. Run health check
-8. Rollback on failure
+6. Sync managed systemd units from release payload (if present), then daemon-reload
+7. Restart runtime services
+8. Run health check
+9. Rollback on failure
 
 ## Reboot Rules
 

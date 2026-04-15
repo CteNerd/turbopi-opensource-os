@@ -15,9 +15,10 @@ Follows docs/updater/PROTOCOL.md and docs/updater/RELEASE_INSTALL_LAYOUT.md
 """
 
 import os
+import shutil
 import subprocess
 import logging
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 from download import download_and_verify, DownloadError, ChecksumError
 from install import install_release, update_metadata_health_status, InstallError
 from health import verify_release_health, log_failed_service_details, TURBOPI_SERVICES
@@ -33,6 +34,15 @@ UPDATABLE_RUNTIME_SERVICES = [
     'turbopi-ui.service',
 ]
 
+# Runtime service unit files managed by release updates. The updater service
+# itself is included here for unit-file synchronization, but is still excluded
+# from restart orchestration while an update is running.
+MANAGED_SYSTEMD_UNITS = [
+    'turbopi-api.service',
+    'turbopi-ui.service',
+    'turbopi-updater.service',
+]
+
 
 class UpdateError(Exception):
     """Exception raised when update application fails"""
@@ -42,6 +52,122 @@ class UpdateError(Exception):
 class RollbackError(Exception):
     """Exception raised when rollback fails"""
     pass
+
+
+def sync_systemd_units_from_release(
+    release_dir: str,
+    systemd_dir: str = '/etc/systemd/system'
+) -> Dict[str, Optional[bytes]]:
+    """
+    Sync managed systemd unit files from a release payload.
+
+    Release payloads may include a `systemd/` directory that contains updated
+    service unit files. Existing unit contents are captured for rollback.
+
+    Args:
+        release_dir: Installed release directory
+        systemd_dir: Systemd unit directory
+
+    Returns:
+        Mapping of destination unit path to previous content bytes.
+        A value of None means the destination file did not previously exist.
+
+    Raises:
+        UpdateError: If copy or daemon-reload fails
+    """
+    release_systemd_dir = os.path.join(release_dir, 'systemd')
+    if not os.path.isdir(release_systemd_dir):
+        logger.info("No systemd unit payload in release; skipping unit sync")
+        return {}
+
+    logger.info("Syncing systemd unit files from release payload")
+    backups: Dict[str, Optional[bytes]] = {}
+    copied_units = []
+
+    try:
+        for unit_name in MANAGED_SYSTEMD_UNITS:
+            src_path = os.path.join(release_systemd_dir, unit_name)
+            if not os.path.isfile(src_path):
+                continue
+
+            dst_path = os.path.join(systemd_dir, unit_name)
+            if dst_path not in backups:
+                if os.path.exists(dst_path):
+                    with open(dst_path, 'rb') as f:
+                        backups[dst_path] = f.read()
+                else:
+                    backups[dst_path] = None
+
+            shutil.copy2(src_path, dst_path)
+            copied_units.append(unit_name)
+            logger.info(f"Updated systemd unit: {unit_name}")
+
+        if not copied_units:
+            logger.info("No managed unit files found in release payload")
+            return {}
+
+        result = subprocess.run(
+            ['systemctl', 'daemon-reload'],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            raise UpdateError(f"Failed systemctl daemon-reload: {result.stderr}")
+
+        logger.info("Systemd daemon reloaded after unit sync")
+        return backups
+
+    except subprocess.TimeoutExpired:
+        raise UpdateError("Timeout during systemd unit synchronization")
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as e:
+        raise UpdateError(f"Failed syncing systemd units from release: {e}")
+
+
+def restore_systemd_units(
+    backups: Dict[str, Optional[bytes]]
+) -> None:
+    """
+    Restore previously backed up systemd unit files.
+
+    Args:
+        backups: Mapping returned by sync_systemd_units_from_release
+
+    Raises:
+        RollbackError: If restore or daemon-reload fails
+    """
+    if not backups:
+        return
+
+    logger.warning("Restoring previous systemd unit files for rollback")
+    try:
+        for dst_path, previous_content in backups.items():
+            if previous_content is None:
+                if os.path.exists(dst_path):
+                    os.remove(dst_path)
+            else:
+                with open(dst_path, 'wb') as f:
+                    f.write(previous_content)
+
+        result = subprocess.run(
+            ['systemctl', 'daemon-reload'],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            raise RollbackError(f"Failed systemctl daemon-reload: {result.stderr}")
+
+        logger.info("Systemd unit rollback completed")
+
+    except subprocess.TimeoutExpired:
+        raise RollbackError("Timeout while restoring systemd units")
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as e:
+        raise RollbackError(f"Failed restoring systemd units: {e}")
 
 
 def get_symlink_target(symlink_path: str) -> Optional[str]:
@@ -281,6 +407,7 @@ def apply_update(
     old_previous = None
     new_release_dir = None
     tarball_path = None
+    systemd_unit_backups: Dict[str, Optional[bytes]] = {}
     
     try:
         # Step 1: Download and verify
@@ -291,7 +418,6 @@ def apply_update(
             logger.info(f"Skipping download, using existing tarball: {tarball_path}")
         else:
             logger.info("Step 1: Download and verify")
-            os.makedirs(version_download_dir, exist_ok=True)
             download_and_verify(download_url, tarball_path, checksum)
         
         # Step 2: Install (extract)
@@ -308,19 +434,23 @@ def apply_update(
         # Step 3: Atomic symlink switch
         logger.info("Step 3: Switch symlinks")
         old_current, old_previous = switch_to_release(new_release_dir, turbopi_root)
+
+        # Step 4: Sync systemd unit files (if provided in release payload)
+        logger.info("Step 4: Sync systemd units")
+        systemd_unit_backups = sync_systemd_units_from_release(new_release_dir)
         
-        # Step 4: Restart services
-        logger.info("Step 4: Restart services")
+        # Step 5: Restart services
+        logger.info("Step 5: Restart services")
         if not restart_services():
             raise UpdateError("Failed to restart services")
         
-        # Step 5: Health check
-        logger.info("Step 5: Health check")
+        # Step 6: Health check
+        logger.info("Step 6: Health check")
         if not verify_release_health(timeout=60):
             raise UpdateError("Health check failed")
         
-        # Step 6: Update metadata with health status
-        logger.info("Step 6: Update metadata")
+        # Step 7: Update metadata with health status
+        logger.info("Step 7: Update metadata")
         update_metadata_health_status(new_release_dir, passed=True)
         
         # Success!
@@ -351,6 +481,9 @@ def apply_update(
             logger.warning("Attempting rollback to previous version")
             try:
                 rollback_to_previous(old_current, old_previous, turbopi_root)
+
+                # Restore systemd units that were replaced by this update.
+                restore_systemd_units(systemd_unit_backups)
                 
                 # Restart services with old version
                 logger.info("Restarting services with previous version")

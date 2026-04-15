@@ -14,6 +14,9 @@ name: CI / Release
 #   src/hal/
 #   src/vision/
 #   src/voice/
+#   systemd/turbopi-api.service
+#   systemd/turbopi-ui.service
+#   systemd/turbopi-updater.service
 #
 # A companion SHA256 checksum file is published alongside the tarball so the
 # on-robot updater can verify integrity before installing.
@@ -95,6 +98,7 @@ jobs:
 
           # Create required directory structure
           mkdir -p "$STAGING/bin"
+          mkdir -p "$STAGING/systemd"
 
           # Copy source modules (skip test files and __pycache__)
           for module in api ui updater control hal vision voice; do
@@ -119,6 +123,12 @@ jobs:
 
           chmod +x "$STAGING/bin/api" "$STAGING/bin/ui" "$STAGING/bin/updater"
 
+          # Include systemd units so updater can apply runtime service unit fixes
+          # during release updates without requiring a separate installer run.
+          for unit in turbopi-api.service turbopi-ui.service turbopi-updater.service; do
+            cp "system/systemd/$unit" "$STAGING/systemd/$unit"
+          done
+
           # Pack — tarball root is the staging directory contents directly
           # (no outer subdirectory wrapper) so extract_tarball() puts files
           # at the expected paths inside /opt/turbopi/releases/<version>/.
@@ -134,7 +144,8 @@ jobs:
           # Smoke-check that the required directories and executables are present.
           tar -tzf "turbopi-$VERSION.tar.gz" | grep -E '^./bin/(api|ui|updater)$' | sort
           for required in ./bin/api ./bin/ui ./bin/updater \
-                          ./src/api/main.py ./src/ui/main.py ./src/updater/main.py; do
+                          ./src/api/main.py ./src/ui/main.py ./src/updater/main.py \
+                          ./systemd/turbopi-api.service ./systemd/turbopi-ui.service ./systemd/turbopi-updater.service; do
             if ! tar -tzf "turbopi-$VERSION.tar.gz" | grep -qF "$required"; then
               echo "ERROR: missing $required in release tarball" >&2
               exit 1

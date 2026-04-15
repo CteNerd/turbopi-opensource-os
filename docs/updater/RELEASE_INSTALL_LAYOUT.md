@@ -27,6 +27,10 @@ The release install layout supports:
 │   │   │   │   └── main.py
 │   │   │   └── updater/
 │   │   │       └── main.py
+│   │   ├── systemd/      # Runtime systemd unit payload
+│   │   │   ├── turbopi-api.service
+│   │   │   ├── turbopi-ui.service
+│   │   │   └── turbopi-updater.service
 │   │   ├── lib/          # Shared libraries (if needed)
 │   │   └── metadata.json # Release metadata and checksums
 │   ├── 0.1.1/            # Example: Release version 0.1.1
@@ -95,14 +99,15 @@ Version switching is atomic and follows this sequence:
    ```bash
    ln -sfn /opt/turbopi/releases/<version> /opt/turbopi/current
    ```
-6. **Restart Services** - Reload services using new code (in dependency order)
+6. **Sync Unit Files** - Replace managed systemd units from release payload (if present) and reload daemon
+7. **Restart Services** - Reload runtime services using new code (in dependency order)
    ```bash
+    systemctl daemon-reload
    systemctl restart turbopi-api.service
    systemctl restart turbopi-ui.service
-   systemctl restart turbopi-updater.service  # Last, as it performs the update
    ```
-7. **Health Check** - Verify services are healthy
-8. **Cleanup** - Remove download staging directory (only if health check passed; preserve failed releases for debugging)
+8. **Health Check** - Verify services are healthy
+9. **Cleanup** - Remove download staging directory (only if health check passed; preserve failed releases for debugging)
 
 ### Rollback Sequence
 
