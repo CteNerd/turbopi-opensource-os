@@ -21,6 +21,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+ReadWritePaths=/var/lib/turbopi /var/log/turbopi
 StateDirectory=turbopi
 StateDirectoryMode=0750
 LogsDirectory=turbopi
