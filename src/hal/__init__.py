@@ -2,6 +2,17 @@
 """Hardware Abstraction Layer exports for TurboPi OpenSource OS."""
 
 from .camera import CameraCalibration, CameraError, CameraFrame, FakeCameraHAL, OpenCVCameraHAL
+from .head import (
+    BaseHeadHAL,
+    HeadCalibration,
+    HeadPulseCalibration,
+    HeadPosition,
+    HeadSafetyError,
+    HeadState,
+    HiwonderTurboPiHeadHAL,
+    SimulatedHeadHAL,
+    create_head_hal_from_env,
+)
 from .motor import (
     BaseMotorHAL,
     HiwonderTurboPiMotorHAL,
@@ -20,6 +31,15 @@ __all__ = [
     'CameraFrame',
     'FakeCameraHAL',
     'OpenCVCameraHAL',
+    'BaseHeadHAL',
+    'HeadCalibration',
+    'HeadPulseCalibration',
+    'HeadPosition',
+    'HeadSafetyError',
+    'HeadState',
+    'HiwonderTurboPiHeadHAL',
+    'SimulatedHeadHAL',
+    'create_head_hal_from_env',
     'BaseMotorHAL',
     'HiwonderTurboPiMotorHAL',
     'MotorCalibration',

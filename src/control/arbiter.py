@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from control.behavior import BehaviorCommand
+from hal.head import HeadPosition, HeadSafetyError, create_head_hal_from_env
 from hal.motor import MotorSafetyError, VelocityCommand, create_motor_hal_from_env
 
 
@@ -58,6 +59,13 @@ class ControlState:
     motor_disabled_channels: List[int]
     motor_degraded: bool
     motor_degraded_reason: Optional[str]
+    head_pan_deg: float
+    head_tilt_deg: float
+    head_pan_min_deg: float
+    head_pan_max_deg: float
+    head_tilt_min_deg: float
+    head_tilt_max_deg: float
+    head_backend: str
 
     def to_dict(self) -> Dict[str, object]:
         """Serialize to JSON-friendly dictionary."""
@@ -75,14 +83,22 @@ class ControlState:
             'motor_disabled_channels': self.motor_disabled_channels,
             'motor_degraded': self.motor_degraded,
             'motor_degraded_reason': self.motor_degraded_reason,
+            'head_pan_deg': self.head_pan_deg,
+            'head_tilt_deg': self.head_tilt_deg,
+            'head_pan_min_deg': self.head_pan_min_deg,
+            'head_pan_max_deg': self.head_pan_max_deg,
+            'head_tilt_min_deg': self.head_tilt_min_deg,
+            'head_tilt_max_deg': self.head_tilt_max_deg,
+            'head_backend': self.head_backend,
         }
 
 
 class ControlArbiter:
     """Arbiter that enforces safety before forwarding commands to motor HAL."""
 
-    def __init__(self, motor_hal=None):
+    def __init__(self, motor_hal=None, head_hal=None):
         self.motor_hal = motor_hal or create_motor_hal_from_env()
+        self.head_hal = head_hal or create_head_hal_from_env()
         self.max_linear_speed = max(_get_float('MAX_LINEAR_SPEED', 0.5), 0.01)
         self.max_angular_speed = max(_get_float('MAX_ANGULAR_SPEED', 1.2), 0.01)
         self.deadman_timeout_s = max(_get_int('DEADMAN_TIMEOUT_MS', 500), 1) / 1000.0
@@ -123,6 +139,13 @@ class ControlArbiter:
             motor_disabled_channels=self.motor_hal.disabled_channels(),
             motor_degraded=bool(self.motor_hal.disabled_channels()),
             motor_degraded_reason=self.motor_hal.degraded_reason(),
+            head_pan_deg=self.head_hal.get_state().position.pan_deg,
+            head_tilt_deg=self.head_hal.get_state().position.tilt_deg,
+            head_pan_min_deg=self.head_hal.calibration.pan_min_deg,
+            head_pan_max_deg=self.head_hal.calibration.pan_max_deg,
+            head_tilt_min_deg=self.head_hal.calibration.tilt_min_deg,
+            head_tilt_max_deg=self.head_hal.calibration.tilt_max_deg,
+            head_backend=self.head_hal.backend_name(),
         )
 
     def arm(self) -> Dict[str, object]:
@@ -229,6 +252,38 @@ class ControlArbiter:
             'behavior': command.behavior,
             'linear_mps': linear,
             'angular_rps': angular,
+        }
+
+    def apply_head(self, pan_deg: float, tilt_deg: float) -> Dict[str, object]:
+        """Apply safe camera head pan/tilt command."""
+        if self.estop_latched:
+            return {'status': 'blocked', 'message': 'E-Stop is latched'}
+
+        try:
+            position = self.head_hal.set_position(HeadPosition(pan_deg=pan_deg, tilt_deg=tilt_deg))
+        except HeadSafetyError as exc:
+            return {'status': 'error', 'message': str(exc)}
+
+        return {
+            'status': 'ok',
+            'pan_deg': position.pan_deg,
+            'tilt_deg': position.tilt_deg,
+        }
+
+    def center_head(self) -> Dict[str, object]:
+        """Center camera head to configured neutral position."""
+        if self.estop_latched:
+            return {'status': 'blocked', 'message': 'E-Stop is latched'}
+
+        try:
+            position = self.head_hal.center()
+        except HeadSafetyError as exc:
+            return {'status': 'error', 'message': str(exc)}
+
+        return {
+            'status': 'ok',
+            'pan_deg': position.pan_deg,
+            'tilt_deg': position.tilt_deg,
         }
 
     def stop(self) -> Dict[str, object]:

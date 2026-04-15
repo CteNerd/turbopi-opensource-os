@@ -50,13 +50,42 @@ class TestControlWebSocketBridge(unittest.TestCase):
         self.bridge.connect(2)
         state = self.arbiter.get_state()
         self.assertEqual(state.linear_mps, 0.0)
+        self.assertEqual(state.angular_rps, 0.0)
+
+    def test_on_disconnect_latches_deadman_triggered(self):
+        # Verify on_disconnect() latches deadman before any new-connection heartbeat resets it.
+        # (connect() intentionally calls heartbeat() afterwards to set up the new session.)
+        self.arbiter.arm()
+        self.bridge.handle_text(self.connection_id, '{"type":"drive","linear":0.1,"angular":0.2}')
+        self.arbiter.on_disconnect()
+        state = self.arbiter.get_state()
         self.assertTrue(state.deadman_triggered)
+        self.assertEqual(state.linear_mps, 0.0)
+        self.assertEqual(state.angular_rps, 0.0)
 
     def test_invalid_drive_values_are_rejected(self):
         self.arbiter.arm()
         result = self.bridge.handle_text(self.connection_id, '{"type":"drive","linear":"fast","angular":0.2}')
         self.assertEqual(result['status'], 'error')
         self.assertEqual(result['message'], 'invalid_drive_values')
+
+    def test_head_message_updates_camera_head(self):
+        result = self.bridge.handle_text(self.connection_id, '{"type":"head","pan_deg":12.0,"tilt_deg":-7.0}')
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['pan_deg'], 12.0)
+        self.assertEqual(result['tilt_deg'], -7.0)
+
+    def test_head_message_center(self):
+        self.bridge.handle_text(self.connection_id, '{"type":"head","pan_deg":20.0,"tilt_deg":10.0}')
+        result = self.bridge.handle_text(self.connection_id, '{"type":"head","center":true}')
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['pan_deg'], 0.0)
+        self.assertEqual(result['tilt_deg'], 0.0)
+
+    def test_invalid_head_values_are_rejected(self):
+        result = self.bridge.handle_text(self.connection_id, '{"type":"head","pan_deg":"left","tilt_deg":0.0}')
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(result['message'], 'invalid_head_values')
 
 
 if __name__ == '__main__':

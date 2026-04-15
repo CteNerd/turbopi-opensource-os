@@ -48,6 +48,13 @@ class TestControlArbiter(unittest.TestCase):
         self.assertEqual(state.get('motor_disabled_channels'), [])
         self.assertFalse(state.get('motor_degraded'))
         self.assertIsNone(state.get('motor_degraded_reason'))
+        self.assertEqual(state.get('head_backend'), 'sim')
+        self.assertIn('head_pan_deg', state)
+        self.assertIn('head_tilt_deg', state)
+        self.assertIn('head_pan_min_deg', state)
+        self.assertIn('head_pan_max_deg', state)
+        self.assertIn('head_tilt_min_deg', state)
+        self.assertIn('head_tilt_max_deg', state)
 
     def test_estop_blocks_arm_until_cleared(self):
         self.arbiter.engage_estop()
@@ -115,6 +122,18 @@ class TestControlArbiter(unittest.TestCase):
         )
         self.assertEqual(result['status'], 'ok')
         self.assertEqual(result['behavior'], 'follow')
+
+    def test_head_commands_are_clamped_to_safe_limits(self):
+        result = self.arbiter.apply_head(999.0, -999.0)
+        self.assertEqual(result['status'], 'ok')
+        state = self.arbiter.get_state()
+        self.assertEqual(result['pan_deg'], state.head_pan_max_deg)
+        self.assertEqual(result['tilt_deg'], state.head_tilt_min_deg)
+
+    def test_head_commands_blocked_when_estop_latched(self):
+        self.arbiter.engage_estop()
+        result = self.arbiter.apply_head(10.0, -5.0)
+        self.assertEqual(result['status'], 'blocked')
 
 
 if __name__ == '__main__':

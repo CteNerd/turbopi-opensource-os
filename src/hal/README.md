@@ -8,6 +8,7 @@ device access out of higher-level services.
 This module currently provides:
 - Motor HAL primitives with safe startup and calibration support
 - Config-selectable motor backend (`sim` or vendor hardware)
+- Camera head HAL primitives for safe pan/tilt control
 - Camera HAL primitives for frame capture workflows
 - Sensor HAL primitives for calibrated sensor reads
 
@@ -24,6 +25,7 @@ that safety and control modules call.
 ## Modules
 
 - `motor.py`: velocity commands, normalized outputs, arm/disarm/stop behavior
+- `head.py`: clamped pan/tilt position control for camera head actuators
 - `camera.py`: open/close semantics and frame metadata
 - `sensor.py`: named sensor reads with calibration offsets
 
@@ -62,6 +64,30 @@ Camera calibration keys:
 - `HAL_CAMERA_HEIGHT`
 - `HAL_CAMERA_FPS`
 - `HAL_CAMERA_PIXEL_FORMAT`
+
+Camera head calibration keys:
+- `HAL_HEAD_BACKEND` (`sim` or `vendor`)
+- `HAL_HEAD_VENDOR_REQUIRED`
+- `HAL_HEAD_PAN_MIN_DEG`
+- `HAL_HEAD_PAN_MAX_DEG`
+- `HAL_HEAD_TILT_MIN_DEG`
+- `HAL_HEAD_TILT_MAX_DEG`
+- `HAL_HEAD_PAN_CENTER_DEG`
+- `HAL_HEAD_TILT_CENTER_DEG`
+- `HAL_HEAD_PAN_SERVO_ID`
+- `HAL_HEAD_TILT_SERVO_ID`
+- `HAL_HEAD_PAN_PULSE_MIN`
+- `HAL_HEAD_PAN_PULSE_MAX`
+- `HAL_HEAD_TILT_PULSE_MIN`
+- `HAL_HEAD_TILT_PULSE_MAX`
+- `HAL_HEAD_PAN_PULSE_CENTER`
+- `HAL_HEAD_TILT_PULSE_CENTER`
+- `HAL_HEAD_MOVE_TIME_S`
+
+Vendor head backend notes:
+- Uses `HiwonderSDK.ros_robot_controller_sdk.Board().pwm_servo_set_position(...)`.
+- Looks for SDK roots at `/opt/turbopi/current` and `/home/pi/TurboPi`.
+- Uses `/home/pi/TurboPi/servo_config.yaml` as default center pulse source when available.
 
 Sensor calibration keys:
 - `HAL_SENSOR_DISTANCE_OFFSET_CM`

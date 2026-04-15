@@ -80,6 +80,7 @@ _SERVICE_STATE_CACHE = {'timestamp': 0.0, 'states': {}}
 _SERVICE_STATE_CACHE_LOCK = threading.Lock()
 _SCHEDULE_HHMM_RE = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 _MAX_UPDATE_CONFIG_BODY_BYTES = 4096
+_MAX_HEAD_BODY_BYTES = 512
 _CONVERSATION_GUARDRAIL_PATTERNS = (
     r'\bestop\b',
     r'\bemergency\s+stop\b',
@@ -977,6 +978,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.handle_control_estop()
         elif self.path == '/control/estop/reset':
             self.handle_control_estop_reset()
+        elif self.path == '/control/head':
+            self.handle_control_head()
         elif self.path == '/control/follow/start':
             self.handle_control_follow_start()
         elif self.path == '/control/follow/stop':
@@ -1289,6 +1292,69 @@ class APIHandler(BaseHTTPRequestHandler):
         """Handle GET /control/state endpoint."""
         arbiter = self.get_control_arbiter()
         self._send_json_response(200, arbiter.get_state().to_dict())
+
+    def handle_control_head(self):
+        """Handle POST /control/head endpoint."""
+        if not self._require_ui_origin():
+            return
+
+        content_length_header = self.headers.get('Content-Length')
+        if content_length_header is None:
+            content_length = 0
+        else:
+            try:
+                content_length = int(content_length_header)
+            except (TypeError, ValueError):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Invalid Content-Length header: must be an integer',
+                })
+                return
+
+        if content_length <= 0:
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'Request body is required.',
+            })
+            return
+
+        if content_length > _MAX_HEAD_BODY_BYTES:
+            self._send_json_response(413, {
+                'error': 'payload_too_large',
+                'message': f'Request body exceeds {_MAX_HEAD_BODY_BYTES} bytes',
+            })
+            return
+
+        try:
+            payload = json.loads(self.rfile.read(content_length).decode('utf-8'))
+            if not isinstance(payload, dict):
+                raise ValueError('payload_must_be_object')
+
+            center = bool(payload.get('center', False))
+            arbiter = self.get_control_arbiter()
+            if center:
+                result = arbiter.center_head()
+            else:
+                pan_deg = float(payload['pan_deg'])
+                tilt_deg = float(payload['tilt_deg'])
+                result = arbiter.apply_head(pan_deg, tilt_deg)
+        except (KeyError, ValueError, TypeError, json.JSONDecodeError):
+            self._send_json_response(400, {
+                'error': 'bad_request',
+                'message': 'Payload must include pan_deg and tilt_deg numbers, or center=true.',
+            })
+            return
+
+        status = result.get('status')
+        if status == 'ok':
+            self._send_json_response(200, result)
+            return
+
+        if status == 'blocked':
+            self._send_json_response(409, result)
+            return
+
+        self._send_json_response(500, result)
 
     def handle_control_follow_state(self):
         """Handle GET /control/follow/state endpoint."""
