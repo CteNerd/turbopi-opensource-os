@@ -552,7 +552,7 @@ paths:
                   head_tilt_max_deg: { type: number }
                   head_backend:
                     type: string
-                    enum: [sim]
+                    enum: [sim, vendor]
 
   /control/head:
     post:

@@ -52,6 +52,17 @@ class TestControlWebSocketBridge(unittest.TestCase):
         self.assertEqual(state.linear_mps, 0.0)
         self.assertEqual(state.angular_rps, 0.0)
 
+    def test_on_disconnect_latches_deadman_triggered(self):
+        # Verify on_disconnect() latches deadman before any new-connection heartbeat resets it.
+        # (connect() intentionally calls heartbeat() afterwards to set up the new session.)
+        self.arbiter.arm()
+        self.bridge.handle_text(self.connection_id, '{"type":"drive","linear":0.1,"angular":0.2}')
+        self.arbiter.on_disconnect()
+        state = self.arbiter.get_state()
+        self.assertTrue(state.deadman_triggered)
+        self.assertEqual(state.linear_mps, 0.0)
+        self.assertEqual(state.angular_rps, 0.0)
+
     def test_invalid_drive_values_are_rejected(self):
         self.arbiter.arm()
         result = self.bridge.handle_text(self.connection_id, '{"type":"drive","linear":"fast","angular":0.2}')

@@ -58,7 +58,6 @@ class ControlWebSocketBridge:
             return self.arbiter.apply_drive(linear, angular)
 
         if message_type == 'head':
-            self.arbiter.heartbeat()
             if bool(message.get('center', False)):
                 return self.arbiter.center_head()
             try:

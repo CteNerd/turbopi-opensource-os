@@ -80,6 +80,7 @@ _SERVICE_STATE_CACHE = {'timestamp': 0.0, 'states': {}}
 _SERVICE_STATE_CACHE_LOCK = threading.Lock()
 _SCHEDULE_HHMM_RE = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 _MAX_UPDATE_CONFIG_BODY_BYTES = 4096
+_MAX_HEAD_BODY_BYTES = 512
 _CONVERSATION_GUARDRAIL_PATTERNS = (
     r'\bestop\b',
     r'\bemergency\s+stop\b',
@@ -1297,11 +1298,30 @@ class APIHandler(BaseHTTPRequestHandler):
         if not self._require_ui_origin():
             return
 
-        content_length = int(self.headers.get('Content-Length', 0))
+        content_length_header = self.headers.get('Content-Length')
+        if content_length_header is None:
+            content_length = 0
+        else:
+            try:
+                content_length = int(content_length_header)
+            except (TypeError, ValueError):
+                self._send_json_response(400, {
+                    'error': 'bad_request',
+                    'message': 'Invalid Content-Length header: must be an integer',
+                })
+                return
+
         if content_length <= 0:
             self._send_json_response(400, {
                 'error': 'bad_request',
                 'message': 'Request body is required.',
+            })
+            return
+
+        if content_length > _MAX_HEAD_BODY_BYTES:
+            self._send_json_response(413, {
+                'error': 'payload_too_large',
+                'message': f'Request body exceeds {_MAX_HEAD_BODY_BYTES} bytes',
             })
             return
 
