@@ -915,9 +915,9 @@ class APIHandler(BaseHTTPRequestHandler):
             })
             return False
 
-        request_host = (self.headers.get('Host') or '').split(':', 1)[0].lower()
+        # Check that the request is from the UI port
         ui_port = int(os.environ.get('UI_PORT', '8081'))
-        if parsed_header.hostname.lower() != request_host or parsed_header.port != ui_port:
+        if parsed_header.port != ui_port:
             self._send_json_response(403, {
                 'error': 'forbidden',
                 'message': 'Requests to this endpoint must originate from the TurboPi UI.'
