@@ -16,6 +16,7 @@ import tarfile
 import json
 import logging
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
@@ -100,6 +101,25 @@ def extract_tarball(tarball_path: str, dest_dir: str) -> None:
         raise InstallError(f"Unexpected error during extraction: {e}")
     
     logger.info(f"Extraction complete: {dest_dir}")
+    
+    # Fix ownership: services run as turbopi user, so release directory must be accessible.
+    # On production robots, turbopi:turbopi ownership is required for services to access files.
+    # In test environments where the user doesn't exist, log a warning and continue.
+    try:
+        result = subprocess.run(
+            ['chown', '-R', 'turbopi:turbopi', dest_dir],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            logger.warning(f"Failed to set ownership turbopi:turbopi on {dest_dir}: {result.stderr.strip()}")
+        else:
+            logger.info(f"Set ownership turbopi:turbopi on {dest_dir}")
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Timeout setting ownership on {dest_dir}")
+    except Exception as e:
+        logger.warning(f"Could not set ownership on {dest_dir}: {e}")
 
 
 def validate_release_structure(release_dir: str) -> None:
