@@ -1,0 +1,130 @@
+name: CI / Release
+
+# Runs tests on every push/PR; builds and publishes a GitHub Release when a
+# version tag (vX.Y.Z) is pushed.  The release artifact is a tarball whose
+# internal layout satisfies the structure that install.py validates:
+#
+#   bin/api          (shell launcher, chmod +x)
+#   bin/ui           (shell launcher, chmod +x)
+#   bin/updater      (shell launcher, chmod +x)
+#   src/api/
+#   src/ui/
+#   src/updater/
+#   src/control/
+#   src/hal/
+#   src/vision/
+#   src/voice/
+#
+# A companion SHA256 checksum file is published alongside the tarball so the
+# on-robot updater can verify integrity before installing.
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Test job — runs on every push and PR
+  # -----------------------------------------------------------------------
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytest websockets
+
+      - name: Run unit tests
+        working-directory: src
+        run: |
+          python -m pytest api/ control/ hal/ updater/ voice/ \
+            -v --tb=short 2>&1
+
+  # -----------------------------------------------------------------------
+  # Release job — only on vX.Y.Z tags, blocked until tests pass
+  # -----------------------------------------------------------------------
+  release:
+    name: Build and publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set VERSION from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build release tarball
+        run: |
+          STAGING="$(mktemp -d)"
+
+          # Create required directory structure
+          mkdir -p "$STAGING/bin"
+
+          # Copy source modules (skip test files and __pycache__)
+          for module in api ui updater control hal vision voice; do
+            [ -d "src/$module" ] || continue
+            mkdir -p "$STAGING/src/$module"
+            find "src/$module" -maxdepth 1 -name "*.py" \
+              ! -name "test_*.py" ! -name "manual_test_*.py" \
+              -exec cp {} "$STAGING/src/$module/" \;
+          done
+
+          # Create bin launcher scripts
+          # Each script changes to the release root so Python's __file__-based
+          # sys.path.insert calls inside each service resolve correctly.
+          printf '#!/bin/sh\ncd "$(dirname "$0")/.." || exit 1\nexec python3 src/api/main.py "$@"\n' \
+            > "$STAGING/bin/api"
+
+          printf '#!/bin/sh\ncd "$(dirname "$0")/.." || exit 1\nexec python3 src/ui/main.py "$@"\n' \
+            > "$STAGING/bin/ui"
+
+          printf '#!/bin/sh\ncd "$(dirname "$0")/.." || exit 1\nexec python3 src/updater/main.py "$@"\n' \
+            > "$STAGING/bin/updater"
+
+          chmod +x "$STAGING/bin/api" "$STAGING/bin/ui" "$STAGING/bin/updater"
+
+          # Pack — tarball root is the staging directory contents directly
+          # (no outer subdirectory wrapper) so extract_tarball() puts files
+          # at the expected paths inside /opt/turbopi/releases/<version>/.
+          tar -czf "turbopi-$VERSION.tar.gz" -C "$STAGING" .
+
+          # Publish just the hex digest (no filename suffix) so the updater
+          # can parse the file with a simple split()[0].
+          sha256sum "turbopi-$VERSION.tar.gz" | awk '{print $1}' \
+            > "turbopi-$VERSION.tar.gz.sha256"
+
+      - name: Verify tarball structure
+        run: |
+          # Smoke-check that the required directories and executables are present.
+          tar -tzf "turbopi-$VERSION.tar.gz" | grep -E '^./bin/(api|ui|updater)$' | sort
+          for required in ./bin/api ./bin/ui ./bin/updater \
+                          ./src/api/main.py ./src/ui/main.py ./src/updater/main.py; do
+            if ! tar -tzf "turbopi-$VERSION.tar.gz" | grep -qF "$required"; then
+              echo "ERROR: missing $required in release tarball" >&2
+              exit 1
+            fi
+          done
+          echo "Tarball structure OK"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "TurboPi OS $VERSION" \
+            --generate-notes \
+            "turbopi-$VERSION.tar.gz" \
+            "turbopi-$VERSION.tar.gz.sha256"

@@ -16,6 +16,10 @@ import signal
 import logging
 import json
 import re
+import urllib.request
+import urllib.error
+from datetime import datetime as _datetime, timezone as _timezone
+from typing import Optional
 
 # Import download and verification functionality
 try:
@@ -64,6 +68,13 @@ class UpdaterService:
         # Set up signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self.handle_shutdown)
         signal.signal(signal.SIGINT, self.handle_shutdown)
+
+        # Auto-update scheduler state
+        self._last_auto_update_date = None  # UTC date of last auto-update check
+        self.github_api_url = os.environ.get(
+            'GITHUB_RELEASES_URL',
+            'https://api.github.com/repos/CteNerd/turbopi-opensource-os/releases/latest',
+        )
 
     @staticmethod
     def _validate_auto_update_channel(channel_raw: str) -> str:
@@ -211,6 +222,147 @@ class UpdaterService:
             logging.critical("Update aborted")
             return False
 
+    # ------------------------------------------------------------------
+    # Auto-update scheduler
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_version(version_str: str):
+        """Parse a semver string to a (major, minor, patch) integer tuple."""
+        try:
+            parts = version_str.lstrip('v').split('.')
+            major = int(parts[0]) if len(parts) > 0 else 0
+            minor = int(parts[1]) if len(parts) > 1 else 0
+            patch = int(parts[2]) if len(parts) > 2 else 0
+            return (major, minor, patch)
+        except (ValueError, IndexError):
+            return (0, 0, 0)
+
+    def _is_newer_version(self, current: str, latest: str) -> bool:
+        """Return True if *latest* is strictly newer than *current*."""
+        return self._normalize_version(latest) > self._normalize_version(current)
+
+    def _fetch_latest_release(self) -> Optional[dict]:
+        """Fetch the latest stable release metadata from the GitHub Releases API.
+
+        Returns a dict with keys ``version``, ``url``, and ``checksum``,
+        or None when the release cannot be determined.
+        """
+        try:
+            req = urllib.request.Request(self.github_api_url)
+            req.add_header('User-Agent', 'TurboPi-UpdateChecker/1.0')
+            with urllib.request.urlopen(req, timeout=15) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            tag_name = data.get('tag_name', '')
+            if not tag_name:
+                logging.error('GitHub API response missing tag_name')
+                return None
+
+            version = tag_name.lstrip('v')
+            assets = data.get('assets', [])
+            url = None
+            checksum = None
+
+            for asset in assets:
+                name = asset.get('name', '')
+                if name.endswith('.tar.gz') and not name.endswith('.sha256'):
+                    url = asset.get('browser_download_url')
+                elif name.endswith('.tar.gz.sha256'):
+                    checksum_url = asset.get('browser_download_url')
+                    if checksum_url:
+                        try:
+                            csum_req = urllib.request.Request(checksum_url)
+                            csum_req.add_header('User-Agent', 'TurboPi-UpdateChecker/1.0')
+                            with urllib.request.urlopen(csum_req, timeout=10) as cr:
+                                content = cr.read().decode('utf-8').strip()
+                                if content:
+                                    candidate = content.split()[0]
+                                    if re.fullmatch(r'[a-fA-F0-9]{64}', candidate):
+                                        checksum = candidate.lower()
+                        except Exception as exc:
+                            logging.warning('Failed to fetch checksum asset: %s', exc)
+
+            if not url:
+                url = data.get('tarball_url', '')
+
+            if not checksum:
+                body = data.get('body', '')
+                m = re.search(r'(?:sha256|SHA256):\s*([a-fA-F0-9]{64})', body)
+                if m:
+                    checksum = m.group(1).lower()
+
+            return {'version': version, 'url': url, 'checksum': checksum}
+
+        except urllib.error.HTTPError as exc:
+            logging.error('HTTP error fetching latest release: %s %s', exc.code, exc.reason)
+        except urllib.error.URLError as exc:
+            logging.error('Network error fetching latest release: %s', exc.reason)
+        except (json.JSONDecodeError, KeyError, ValueError) as exc:
+            logging.error('Error parsing release data: %s', exc)
+        except Exception as exc:
+            logging.error('Unexpected error fetching latest release: %s', exc)
+        return None
+
+    def _should_run_auto_update_now(self, now_utc) -> bool:
+        """Return True when auto-update is enabled and the scheduled time has been
+        reached today but has not yet run today."""
+        if not self.auto_update:
+            return False
+        today = now_utc.date()
+        if self._last_auto_update_date == today:
+            return False
+        try:
+            h, m = self.auto_update_schedule_utc.split(':')
+            scheduled = now_utc.replace(
+                hour=int(h), minute=int(m), second=0, microsecond=0
+            )
+        except (ValueError, AttributeError):
+            return False
+        return now_utc >= scheduled
+
+    def maybe_run_auto_update(self) -> None:
+        """Run a scheduled auto-update check if due.
+
+        Applies the update when a newer stable release is found and all
+        integrity information (url + checksum) is present.
+        """
+        now_utc = _datetime.now(_timezone.utc)
+        if not self._should_run_auto_update_now(now_utc):
+            return
+
+        # Mark today as checked *before* attempting so a transient failure does
+        # not cause repeated attempts within the same day.
+        self._last_auto_update_date = now_utc.date()
+
+        logging.info('Auto-update scheduler: checking for new release')
+        release = self._fetch_latest_release()
+        if not release:
+            logging.warning('Auto-update scheduler: could not fetch release metadata')
+            return
+
+        current = os.environ.get('VERSION', '0.1.0-dev')
+        latest = release.get('version', '')
+        if not self._is_newer_version(current, latest):
+            logging.info(
+                'Auto-update scheduler: already on latest version (%s)', current
+            )
+            return
+
+        url = release.get('url')
+        checksum = release.get('checksum')
+        if not url or not checksum:
+            logging.warning(
+                'Auto-update scheduler: release %s is missing url or checksum; skipping',
+                latest,
+            )
+            return
+
+        logging.info('Auto-update scheduler: upgrading %s -> %s', current, latest)
+        self.apply_update_to_system(version=latest, url=url, checksum=checksum)
+
+    # ------------------------------------------------------------------
+
     def check_for_update_trigger(self) -> bool:
         """
         Check if there's an update trigger file and process it.
@@ -303,7 +455,10 @@ class UpdaterService:
             # Check for update trigger file
             if self.check_for_update_trigger():
                 logging.info("Update trigger processed")
-            
+
+            # Run scheduled auto-update if due
+            self.maybe_run_auto_update()
+
             # Sleep before next check
             time.sleep(self.poll_interval)
             check_count += 1
