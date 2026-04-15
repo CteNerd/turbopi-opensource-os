@@ -26,6 +26,14 @@ from health import verify_release_health, log_failed_service_details, TURBOPI_SE
 logger = logging.getLogger(__name__)
 
 
+# Restart only services that should pick up the new release immediately.
+# The updater service must not restart itself while orchestrating an update.
+UPDATABLE_RUNTIME_SERVICES = [
+    'turbopi-api.service',
+    'turbopi-ui.service',
+]
+
+
 class UpdateError(Exception):
     """Exception raised when update application fails"""
     pass
@@ -101,14 +109,16 @@ def restart_services() -> bool:
     Services are restarted in order:
     1. turbopi-api.service (base service)
     2. turbopi-ui.service (depends on api)
-    3. turbopi-updater.service (last, as it performs the update)
+
+    The updater service is intentionally excluded to avoid self-termination
+    while an update is in progress.
     
     Returns:
         True if all services restarted successfully, False otherwise
     """
     logger.info("Restarting services in dependency order...")
     
-    for service in TURBOPI_SERVICES:
+    for service in UPDATABLE_RUNTIME_SERVICES:
         logger.info(f"Restarting {service}...")
         try:
             result = subprocess.run(

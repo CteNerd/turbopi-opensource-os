@@ -3,7 +3,6 @@ Description=TurboPi Update Service
 Documentation=https://github.com/CteNerd/turbopi-opensource-os
 After=network-online.target turbopi-api.service
 Wants=network-online.target
-BindsTo=turbopi-api.service
 
 [Service]
 Type=simple
@@ -22,7 +21,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/turbopi /var/log/turbopi
+ReadWritePaths=/opt/turbopi /var/log/turbopi /var/lib/turbopi
 
 [Install]
 WantedBy=multi-user.target

@@ -100,20 +100,29 @@ class TestRestartServices(unittest.TestCase):
     
     @patch('subprocess.run')
     def test_restart_services_success(self, mock_run):
-        """Test successful restart of all services"""
+        """Test successful restart of API/UI services."""
         mock_run.return_value = MagicMock(returncode=0, stderr='')
         
         result = restart_services()
         
         self.assertTrue(result)
         
-        # Verify all three services were restarted in order
-        self.assertEqual(mock_run.call_count, 3)
+        # Verify only API/UI are restarted in order.
+        self.assertEqual(mock_run.call_count, 2)
         calls = mock_run.call_args_list
         
         self.assertIn('turbopi-api.service', calls[0][0][0])
         self.assertIn('turbopi-ui.service', calls[1][0][0])
-        self.assertIn('turbopi-updater.service', calls[2][0][0])
+
+    @patch('subprocess.run')
+    def test_restart_services_does_not_restart_updater(self, mock_run):
+        """Updater service must not be restarted by itself."""
+        mock_run.return_value = MagicMock(returncode=0, stderr='')
+
+        restart_services()
+
+        called = ' '.join(' '.join(call[0][0]) for call in mock_run.call_args_list)
+        self.assertNotIn('turbopi-updater.service', called)
     
     @patch('subprocess.run')
     def test_restart_services_first_fails(self, mock_run):
