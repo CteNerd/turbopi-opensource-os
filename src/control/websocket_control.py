@@ -57,5 +57,16 @@ class ControlWebSocketBridge:
                 return {'status': 'error', 'message': 'invalid_drive_values'}
             return self.arbiter.apply_drive(linear, angular)
 
+        if message_type == 'head':
+            self.arbiter.heartbeat()
+            if bool(message.get('center', False)):
+                return self.arbiter.center_head()
+            try:
+                pan_deg = float(message.get('pan_deg', 0.0))
+                tilt_deg = float(message.get('tilt_deg', 0.0))
+            except (TypeError, ValueError):
+                return {'status': 'error', 'message': 'invalid_head_values'}
+            return self.arbiter.apply_head(pan_deg, tilt_deg)
+
         logger.warning('Unknown control websocket message type: %s', message_type)
         return {'status': 'error', 'message': 'unknown_message_type'}

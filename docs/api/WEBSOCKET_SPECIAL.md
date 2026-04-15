@@ -34,6 +34,19 @@ Low-latency manual control channel for teleoperation.
   "type": "stop"
 }
 
+### Head Command
+{
+  "type": "head",
+  "pan_deg": 15.0,
+  "tilt_deg": -5.0
+}
+
+### Head Center Command
+{
+  "type": "head",
+  "center": true
+}
+
 ### Heartbeat
 {
   "type": "heartbeat"
@@ -51,3 +64,4 @@ Low-latency manual control channel for teleoperation.
 - E-Stop overrides all messages
 - Deadman timeout is configured via DEADMAN_TIMEOUT_MS
 - Speed limits are configured via MAX_LINEAR_SPEED and MAX_ANGULAR_SPEED
+- Head pan/tilt values are clamped to HAL_HEAD_* configured bounds

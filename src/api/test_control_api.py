@@ -45,6 +45,22 @@ class TestControlAPI(unittest.TestCase):
             body = exc.read().decode()
             return exc.code, json.loads(body) if body else {}
 
+    def _post_json(self, path, payload):
+        req = urllib.request.Request(
+            f'{self.base}{path}',
+            data=json.dumps(payload).encode('utf-8'),
+            method='POST',
+        )
+        req.add_header('Origin', 'http://localhost:8081')
+        req.add_header('Content-Type', 'application/json')
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                body = response.read().decode()
+                return response.status, json.loads(body) if body else {}
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode()
+            return exc.code, json.loads(body) if body else {}
+
     def _post_no_origin(self, path):
         req = urllib.request.Request(f'{self.base}{path}', data=b'', method='POST')
         try:
@@ -101,11 +117,34 @@ class TestControlAPI(unittest.TestCase):
         self.assertIn('motor_backend', payload)
         self.assertIn('motor_disabled_channels', payload)
         self.assertIn('motor_degraded', payload)
+        self.assertIn('head_pan_deg', payload)
+        self.assertIn('head_tilt_deg', payload)
+        self.assertIn('head_backend', payload)
 
     def test_control_post_requires_ui_origin(self):
         status, payload = self._post_no_origin('/control/arm')
         self.assertEqual(status, 403)
         self.assertEqual(payload.get('error'), 'forbidden')
+
+    def test_head_control_endpoint(self):
+        self._post('/control/estop/reset')
+        status, payload = self._post_json('/control/head', {'pan_deg': 15, 'tilt_deg': -5})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload.get('status'), 'ok')
+        self.assertEqual(payload.get('pan_deg'), 15.0)
+        self.assertEqual(payload.get('tilt_deg'), -5.0)
+
+    def test_head_control_blocks_when_estop_latched(self):
+        self._post('/control/estop')
+        status, payload = self._post_json('/control/head', {'pan_deg': 10, 'tilt_deg': 3})
+        self.assertEqual(status, 409)
+        self.assertEqual(payload.get('status'), 'blocked')
+        self._post('/control/estop/reset')
+
+    def test_head_control_payload_validation(self):
+        status, payload = self._post_json('/control/head', {'pan_deg': 'left'})
+        self.assertEqual(status, 400)
+        self.assertEqual(payload.get('error'), 'bad_request')
 
 
 if __name__ == '__main__':

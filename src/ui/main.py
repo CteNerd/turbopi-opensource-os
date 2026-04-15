@@ -189,27 +189,85 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             object-fit: contain;
         }}
 
+        .mobile-tabs {{
+            display: none;
+        }}
         @media (max-width: 768px) {{
             body {{
                 margin: 0;
-                padding: 12px;
+                padding: 0;
             }}
             .container {{
-                padding: 16px;
+                padding: 12px;
+                box-shadow: none;
+                border-radius: 0;
+            }}
+            h1 {{
+                font-size: 1.3rem;
+                margin-top: 12px;
+                margin-bottom: 4px;
+            }}
+            .status {{
+                display: none;
+            }}
+            .mobile-tabs {{
+                display: flex;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                background: #fff;
+                border-bottom: 2px solid #e0e0e0;
+                margin: 8px -12px 16px;
+                padding: 0;
+            }}
+            .tab-btn {{
+                flex: 1;
+                padding: 12px 8px;
+                border: none;
+                border-bottom: 3px solid transparent;
+                background: transparent;
+                font-size: 15px;
+                font-weight: 600;
+                color: #888;
+                cursor: pointer;
+            }}
+            .tab-btn.active {{
+                color: #4CAF50;
+                border-bottom-color: #4CAF50;
+            }}
+            .section[data-tab] {{
+                display: none;
+            }}
+            .section[data-tab].tab-visible {{
+                display: block;
+            }}
+            .control-btn-grid {{
+                display: grid !important;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }}
+            .control-btn-grid .button {{
+                margin-top: 0;
+                width: 100%;
+                padding: 14px 10px;
+                font-size: 15px;
             }}
             .joystick-wrap {{
                 justify-content: center;
+                flex-direction: column;
+                align-items: center;
             }}
             .joystick-pad {{
-                width: 200px;
-                height: 200px;
+                width: 260px;
+                height: 260px;
             }}
             .joystick-knob {{
-                left: 71px;
-                top: 71px;
+                left: 101px;
+                top: 101px;
             }}
             .video-frame {{
-                min-height: 180px;
+                min-height: 200px;
+                max-width: 100%;
             }}
         }}
     </style>
@@ -217,7 +275,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
     <div class="container">
         <h1>{robot_name} Control Panel</h1>
-        
+
+        <nav class="mobile-tabs" role="tablist" aria-label="Section navigation">
+            <button class="tab-btn active" data-tab="drive" onclick="showTab('drive')">Drive</button>
+            <button class="tab-btn" data-tab="camera" onclick="showTab('camera')">Camera</button>
+            <button class="tab-btn" data-tab="settings" onclick="showTab('settings')">Settings</button>
+        </nav>
+
         <div class="status">
             <h2>System Status</h2>
             <p>✓ API Service: Running on port {api_port}</p>
@@ -225,7 +289,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <p>✓ Configuration: Loaded</p>
         </div>
 
-        <div class="section">
+        <div class="section" data-tab="settings">
             <h2>Voice Settings</h2>
             <div id="alert" class="alert"></div>
             
@@ -263,7 +327,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <button class="button" onclick="saveWakeWordConfig()">Save Settings</button>
         </div>
 
-        <div class="section">
+        <div class="section" data-tab="settings">
             <h2>Software Updates</h2>
             <div id="update-alert" class="alert"></div>
 
@@ -313,7 +377,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-tab="settings">
             <h2>Health Telemetry</h2>
             <div id="diagnostics-alert" class="alert"></div>
             <p>Uptime: <span id="healthUptime" class="current-value">Loading...</span></p>
@@ -329,10 +393,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <p class="info">Diagnostics bundles include redacted logs and configuration to support troubleshooting without SSH access.</p>
         </div>
 
-        <div class="section">
+        <div class="section" data-tab="drive">
             <h2>Teleoperation</h2>
             <div id="control-alert" class="alert"></div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;" class="control-btn-grid">
                 <button class="button" onclick="armMotors()">Arm</button>
                 <button class="button button-warning" onclick="disarmMotors()">Disarm</button>
                 <button class="button button-danger" onclick="engageEstop()">E-Stop</button>
@@ -365,16 +429,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-tab="camera">
             <h2>Vision</h2>
             <div class="video-panel">
                 <img id="videoStream" class="video-frame" alt="Live camera stream" />
                 <p>Stream: <span id="videoStatus" class="current-value">connecting...</span></p>
                 <p>FPS: <span id="videoFps" class="current-value">0.0</span></p>
             </div>
+            <div style="margin-top: 14px;">
+                <h3 style="margin-bottom: 8px; color: #444;">Camera Head</h3>
+                <p class="info">Pan/tilt commands are clamped to safe bounds from backend config.</p>
+                <div class="form-group">
+                    <label for="headPanSlider">Pan (<span id="headPanValue" class="current-value">0.0</span> deg)</label>
+                    <input id="headPanSlider" type="range" min="-70" max="70" step="1" value="0" oninput="scheduleHeadCommand()">
+                </div>
+                <div class="form-group">
+                    <label for="headTiltSlider">Tilt (<span id="headTiltValue" class="current-value">0.0</span> deg)</label>
+                    <input id="headTiltSlider" type="range" min="-35" max="35" step="1" value="0" oninput="scheduleHeadCommand()">
+                </div>
+                <button class="button button-secondary" onclick="centerHead()">Center Head</button>
+            </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-tab="settings">
             <h2>Conversation</h2>
             <div id="chat-alert" class="alert"></div>
             <div id="chatPanel" style="border:1px solid #d0d7de; border-radius:8px; padding:10px; min-height:140px; max-height:280px; overflow-y:auto; background:#fafafa;"></div>
@@ -405,6 +482,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let dragActive = false;
         let controlMaxLinear = 0.5;
         let controlMaxAngular = 1.2;
+        let headPanMinDeg = -70;
+        let headPanMaxDeg = 70;
+        let headTiltMinDeg = -35;
+        let headTiltMaxDeg = 35;
+        let headCommandTimer = null;
         let videoReconnectTimer = null;
         let videoIdlePolls = 0;
         let ttsVolume = 0.8;
@@ -868,9 +950,64 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}));
         }}
 
+        function setHeadDisplay(panDeg, tiltDeg) {{
+            document.getElementById('headPanValue').textContent = panDeg.toFixed(1);
+            document.getElementById('headTiltValue').textContent = tiltDeg.toFixed(1);
+        }}
+
+        function sendHeadCommand(panDeg, tiltDeg, center = false) {{
+            if (!controlSocket || controlSocket.readyState !== WebSocket.OPEN) {{
+                showControlAlert('Control websocket is disconnected', 'error');
+                return;
+            }}
+            if (center) {{
+                controlSocket.send(JSON.stringify({{ type: 'head', center: true }}));
+                return;
+            }}
+            controlSocket.send(JSON.stringify({{
+                type: 'head',
+                pan_deg: panDeg,
+                tilt_deg: tiltDeg,
+            }}));
+        }}
+
+        function updateHeadFromSliders(sendNow = false) {{
+            const panSlider = document.getElementById('headPanSlider');
+            const tiltSlider = document.getElementById('headTiltSlider');
+            const panDeg = parseFloat(panSlider.value) || 0;
+            const tiltDeg = parseFloat(tiltSlider.value) || 0;
+            setHeadDisplay(panDeg, tiltDeg);
+            if (!sendNow) {{
+                return;
+            }}
+            sendHeadCommand(panDeg, tiltDeg);
+        }}
+
+        function scheduleHeadCommand() {{
+            if (headCommandTimer) {{
+                clearTimeout(headCommandTimer);
+            }}
+            headCommandTimer = setTimeout(() => {{
+                headCommandTimer = null;
+                updateHeadFromSliders(true);
+            }}, 60);
+        }}
+
+        function centerHead() {{
+            const panSlider = document.getElementById('headPanSlider');
+            const tiltSlider = document.getElementById('headTiltSlider');
+            panSlider.value = 0;
+            tiltSlider.value = 0;
+            setHeadDisplay(0, 0);
+            sendHeadCommand(0, 0, true);
+        }}
+
         function stopJoystick() {{
-            document.getElementById('joystickKnob').style.left = '81px';
-            document.getElementById('joystickKnob').style.top = '81px';
+            const _pad = document.getElementById('joystickPad');
+            const _knob = document.getElementById('joystickKnob');
+            const _c = Math.floor((_pad.offsetWidth - _knob.offsetWidth) / 2);
+            _knob.style.left = _c + 'px';
+            _knob.style.top = _c + 'px';
             if (controlSocket && controlSocket.readyState === WebSocket.OPEN) {{
                 controlSocket.send(JSON.stringify({{ type: 'stop' }}));
             }}
@@ -881,9 +1018,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function setupJoystick() {{
             const pad = document.getElementById('joystickPad');
             const knob = document.getElementById('joystickKnob');
-            const radius = 81;
 
             function updateFromEvent(event) {{
+                const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
+                const radius = center;
                 const rect = pad.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
@@ -895,8 +1033,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     dy = (dy / distance) * radius;
                 }}
 
-                knob.style.left = (81 + dx) + 'px';
-                knob.style.top = (81 + dy) + 'px';
+                knob.style.left = (center + dx) + 'px';
+                knob.style.top = (center + dy) + 'px';
 
                 const linear = (-dy / radius) * controlMaxLinear;
                 const angular = (dx / radius) * controlMaxAngular;
@@ -936,6 +1074,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('motorDegradedValue').textContent = data.motor_degraded ? 'yes' : 'no';
                 const disabled = Array.isArray(data.motor_disabled_channels) ? data.motor_disabled_channels : [];
                 document.getElementById('motorDisabledChannelsValue').textContent = disabled.length ? disabled.join(', ') : 'none';
+                if (typeof data.head_pan_min_deg === 'number') {{
+                    headPanMinDeg = data.head_pan_min_deg;
+                }}
+                if (typeof data.head_pan_max_deg === 'number') {{
+                    headPanMaxDeg = data.head_pan_max_deg;
+                }}
+                if (typeof data.head_tilt_min_deg === 'number') {{
+                    headTiltMinDeg = data.head_tilt_min_deg;
+                }}
+                if (typeof data.head_tilt_max_deg === 'number') {{
+                    headTiltMaxDeg = data.head_tilt_max_deg;
+                }}
+                const panSlider = document.getElementById('headPanSlider');
+                const tiltSlider = document.getElementById('headTiltSlider');
+                panSlider.min = String(headPanMinDeg);
+                panSlider.max = String(headPanMaxDeg);
+                tiltSlider.min = String(headTiltMinDeg);
+                tiltSlider.max = String(headTiltMaxDeg);
+                if (typeof data.head_pan_deg === 'number') {{
+                    panSlider.value = data.head_pan_deg;
+                }}
+                if (typeof data.head_tilt_deg === 'number') {{
+                    tiltSlider.value = data.head_tilt_deg;
+                }}
+                setHeadDisplay(parseFloat(panSlider.value) || 0, parseFloat(tiltSlider.value) || 0);
                 if (typeof data.max_linear_speed === 'number') {{
                     controlMaxLinear = data.max_linear_speed;
                 }}
@@ -1171,6 +1334,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             showSystemAlert('Robot is rebooting. Reload this page in 30–60 seconds.', 'success');
         }}
         
+        function showTab(tab) {{
+            document.querySelectorAll('.tab-btn').forEach(b => {{
+                b.classList.toggle('active', b.dataset.tab === tab);
+            }});
+            document.querySelectorAll('.section[data-tab]').forEach(s => {{
+                s.classList.toggle('tab-visible', s.dataset.tab === tab);
+            }});
+        }}
+
         // Load configuration when page loads
         window.addEventListener('DOMContentLoaded', () => {{
             loadWakeWordConfig();
@@ -1181,10 +1353,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             connectControlSocket();
             setupJoystick();
             setupVideoPanel();
+            updateHeadFromSliders(false);
             refreshControlState();
             refreshSystemStatus();
             setInterval(refreshControlState, 500);
             setInterval(refreshSystemStatus, 5000);
+            if (window.innerWidth <= 768) {{
+                showTab('drive');
+            }}
         }});
     </script>
 </body>
