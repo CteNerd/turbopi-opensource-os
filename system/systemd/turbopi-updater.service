@@ -25,7 +25,7 @@ StateDirectory=turbopi
 StateDirectoryMode=0750
 LogsDirectory=turbopi
 LogsDirectoryMode=0750
-ReadWritePaths=/opt/turbopi
+ReadWritePaths=/opt/turbopi /etc/systemd/system
 
 [Install]
 WantedBy=multi-user.target
