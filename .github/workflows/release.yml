@@ -48,19 +48,26 @@ jobs:
           # Keep PR CI deterministic: run non-privileged, non-flaky unit suites.
           # Integration tests that bind fixed ports or write under /opt are
           # intentionally excluded from this gate.
+          set -e
           python -m pytest \
             src/control/test_arbiter.py \
             src/control/test_follow_behavior.py \
             src/control/test_follow_sim_2d.py \
+            -v --tb=short 2>&1
+          python -m pytest \
             src/hal/test_camera.py \
             src/hal/test_motor.py \
             src/hal/test_sensor.py \
+            -v --tb=short 2>&1
+          python -m pytest \
             src/updater/test_auto_update_scheduler.py \
             src/updater/test_download.py \
             src/updater/test_health.py \
             src/updater/test_install.py \
             src/updater/test_integration.py \
             src/updater/test_integration_trigger.py \
+            -v --tb=short 2>&1
+          python -m pytest \
             src/voice/test_command_intent.py \
             src/voice/test_replay_command_intent.py \
             -v --tb=short 2>&1

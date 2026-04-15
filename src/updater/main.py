@@ -230,12 +230,14 @@ class UpdaterService:
     def _normalize_version(version_str: str):
         """Parse a semver string to a (major, minor, patch) integer tuple."""
         try:
-            parts = version_str.lstrip('v').split('.')
+            normalized = (version_str or '').strip().lstrip('v')
+            normalized = re.split(r'[-+]', normalized, maxsplit=1)[0]
+            parts = normalized.split('.')
             major = int(parts[0]) if len(parts) > 0 else 0
             minor = int(parts[1]) if len(parts) > 1 else 0
             patch = int(parts[2]) if len(parts) > 2 else 0
             return (major, minor, patch)
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, AttributeError):
             return (0, 0, 0)
 
     def _is_newer_version(self, current: str, latest: str) -> bool:
@@ -263,12 +265,14 @@ class UpdaterService:
             assets = data.get('assets', [])
             url = None
             checksum = None
+            expected_asset_name = f'turbopi-{version}.tar.gz'
+            expected_checksum_name = f'{expected_asset_name}.sha256'
 
             for asset in assets:
                 name = asset.get('name', '')
-                if name.endswith('.tar.gz') and not name.endswith('.sha256'):
+                if name == expected_asset_name:
                     url = asset.get('browser_download_url')
-                elif name.endswith('.tar.gz.sha256'):
+                elif name == expected_checksum_name:
                     checksum_url = asset.get('browser_download_url')
                     if checksum_url:
                         try:
@@ -283,8 +287,15 @@ class UpdaterService:
                         except Exception as exc:
                             logging.warning('Failed to fetch checksum asset: %s', exc)
 
+            # Do not fall back to GitHub source tarballs; updater install expects
+            # a specific packaged release layout with bin/ and service directories.
             if not url:
-                url = data.get('tarball_url', '')
+                logging.warning(
+                    'Expected release asset %s not found for tag %s',
+                    expected_asset_name,
+                    tag_name,
+                )
+                return None
 
             if not checksum:
                 body = data.get('body', '')

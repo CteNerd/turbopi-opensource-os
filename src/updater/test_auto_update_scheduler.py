@@ -57,9 +57,11 @@ class TestNormalizeVersion(unittest.TestCase):
     def test_invalid_string_returns_zeros(self):
         self.assertEqual(self.svc._normalize_version('bad'), (0, 0, 0))
 
-    def test_dev_suffix_returns_zeros(self):
-        # '0.1.0-dev'.split('.')[2] = '0-dev'; int('0-dev') raises ValueError
-        self.assertEqual(self.svc._normalize_version('0.1.0-dev'), (0, 0, 0))
+    def test_dev_suffix_normalizes_to_base_version(self):
+        self.assertEqual(self.svc._normalize_version('0.1.0-dev'), (0, 1, 0))
+
+    def test_build_suffix_normalizes_to_base_version(self):
+        self.assertEqual(self.svc._normalize_version('1.2.3+build5'), (1, 2, 3))
 
     def test_empty_string_returns_zeros(self):
         self.assertEqual(self.svc._normalize_version(''), (0, 0, 0))
@@ -87,8 +89,8 @@ class TestIsNewerVersion(unittest.TestCase):
         self.assertFalse(self.svc._is_newer_version('0.2.0', '0.1.9'))
 
     def test_dev_current_vs_stable_latest(self):
-        # dev builds are treated as (0,0,0) so any stable release looks newer
-        self.assertTrue(self.svc._is_newer_version('0.1.0-dev', '0.1.0'))
+        # Pre-release suffixes normalize to the same base version.
+        self.assertFalse(self.svc._is_newer_version('0.1.0-dev', '0.1.0'))
 
 
 class TestShouldRunAutoUpdateNow(unittest.TestCase):
@@ -307,25 +309,41 @@ class TestFetchLatestRelease(unittest.TestCase):
         payload = {
             'tag_name': 'v1.0.0',
             'assets': [],
-            'tarball_url': 'https://example.com/v1.0.0.tar.gz',
         }
         mock_urlopen.return_value = self._mock_response(payload)
         result = self.svc._fetch_latest_release()
-        self.assertIsNotNone(result)
-        self.assertEqual(result['version'], '1.0.0')
+        self.assertIsNone(result)
 
     @patch('main.urllib.request.urlopen')
-    def test_falls_back_to_tarball_url(self, mock_urlopen):
+    def test_returns_none_without_expected_asset(self, mock_urlopen):
         payload = {
             'tag_name': 'v0.3.0',
             'assets': [],
-            'tarball_url': 'https://example.com/tarball',
             'body': '',
         }
         mock_urlopen.return_value = self._mock_response(payload)
         result = self.svc._fetch_latest_release()
-        self.assertEqual(result['url'], 'https://example.com/tarball')
-        self.assertIsNone(result['checksum'])
+        self.assertIsNone(result)
+
+    @patch('main.urllib.request.urlopen')
+    def test_ignores_non_matching_tarball_asset_names(self, mock_urlopen):
+        payload = {
+            'tag_name': 'v0.3.0',
+            'assets': [
+                {
+                    'name': 'other-0.3.0.tar.gz',
+                    'browser_download_url': 'https://example.com/other-0.3.0.tar.gz',
+                },
+                {
+                    'name': 'other-0.3.0.tar.gz.sha256',
+                    'browser_download_url': 'https://example.com/other-0.3.0.tar.gz.sha256',
+                },
+            ],
+            'body': 'SHA256: ' + 'a' * 64,
+        }
+        mock_urlopen.return_value = self._mock_response(payload)
+        result = self.svc._fetch_latest_release()
+        self.assertIsNone(result)
 
     @patch('main.urllib.request.urlopen')
     def test_returns_none_on_invalid_json(self, mock_urlopen):
