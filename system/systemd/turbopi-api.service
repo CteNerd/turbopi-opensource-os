@@ -21,7 +21,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/log/turbopi /var/lib/turbopi
+StateDirectory=turbopi
+StateDirectoryMode=0750
+LogsDirectory=turbopi
+LogsDirectoryMode=0750
 
 [Install]
 WantedBy=multi-user.target
