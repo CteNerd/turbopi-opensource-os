@@ -86,12 +86,30 @@ if ! id -u turbopi > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Created turbopi user${NC}"
 fi
 
-# Set ownership
+# Set ownership and permissions (comprehensive setup)
 echo "Setting permissions..."
+
+# /opt/turbopi directory tree
 chown -R turbopi:turbopi /opt/turbopi
-chown -R turbopi:turbopi /var/log/turbopi
+chmod -R u+rwX,g+rX /opt/turbopi
+echo "  ✓ /opt/turbopi owned by turbopi:turbopi"
+
+# State and log directories
+mkdir -p /var/lib/turbopi
+chown turbopi:turbopi /var/lib/turbopi
+chmod 0750 /var/lib/turbopi
+
+mkdir -p /var/log/turbopi
+chown turbopi:turbopi /var/log/turbopi
+chmod 0750 /var/log/turbopi
+echo "  ✓ State and log directories created"
+
+# Config directory and file
+chown root:turbopi /etc/turbopi
+chmod 0750 /etc/turbopi
 chown root:turbopi /etc/turbopi/config.env
-chmod 640 /etc/turbopi/config.env
+chmod 0640 /etc/turbopi/config.env
+echo "  ✓ Configuration permissions set"
 
 # Install systemd service files
 echo "Installing systemd services..."
