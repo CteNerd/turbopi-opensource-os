@@ -110,11 +110,26 @@ def is_valid_control_ws_origin(origin: Optional[str], host_header: Optional[str]
 
 def get_current_version() -> str:
     """
-    Get the current version from environment variable.
+    Get the current version by reading the current release symlink.
+    
+    The version is determined from /opt/turbopi/current which points to
+    /opt/turbopi/releases/<version>. Falls back to VERSION env var for
+    non-standard deployments.
     
     Returns:
-        Current version string from VERSION env var, defaults to '0.1.0-dev'
+        Current version string
     """
+    try:
+        current_link = '/opt/turbopi/current'
+        if os.path.islink(current_link):
+            target = os.readlink(current_link)
+            # Extract version from path like /opt/turbopi/releases/0.1.4
+            version = os.path.basename(target)
+            if version:
+                return version
+    except Exception:
+        pass  # Fall through to environment variable
+    
     return os.environ.get('VERSION', '0.1.0-dev')
 
 
