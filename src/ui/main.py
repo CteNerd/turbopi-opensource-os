@@ -179,6 +179,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             display: grid;
             gap: 10px;
         }}
+        .video-overlay-wrap {{
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+        }}
         .video-frame {{
             width: 100%;
             max-width: 640px;
@@ -187,6 +192,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: #000;
             min-height: 240px;
             object-fit: contain;
+        }}
+        .mobile-overlay-controls {{
+            display: none;
+        }}
+        .overlay-quick-actions {{
+            display: none;
+        }}
+        .overlay-pad {{
+            width: 112px;
+            height: 112px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.65);
+            position: absolute;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.2) 0%, rgba(20,20,20,0.45) 100%);
+            touch-action: none;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }}
+        .overlay-pad-drive {{
+            left: 10px;
+            bottom: 10px;
+        }}
+        .overlay-pad-head {{
+            right: 10px;
+            bottom: 10px;
+        }}
+        .overlay-knob {{
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.88);
+            position: absolute;
+            left: 34px;
+            top: 34px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+        }}
+        .overlay-label {{
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: -22px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #ffffff;
+            background: rgba(0,0,0,0.55);
+            padding: 2px 8px;
+            border-radius: 12px;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
         }}
 
         .mobile-tabs {{
@@ -268,6 +322,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             .video-frame {{
                 min-height: 200px;
                 max-width: 100%;
+            }}
+            .mobile-overlay-controls {{
+                display: block;
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+            }}
+            .mobile-overlay-controls .overlay-pad {{
+                pointer-events: auto;
+            }}
+            .overlay-quick-actions {{
+                display: flex;
+                gap: 6px;
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                z-index: 3;
+                pointer-events: none;
+            }}
+            .overlay-action-btn {{
+                pointer-events: auto;
+                border: 1px solid rgba(255,255,255,0.35);
+                background: rgba(15,15,15,0.55);
+                color: #fff;
+                border-radius: 999px;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 6px 10px;
+                line-height: 1;
+                backdrop-filter: blur(2px);
+                -webkit-backdrop-filter: blur(2px);
+            }}
+            .overlay-action-btn-danger {{
+                background: rgba(183,28,28,0.65);
+            }}
+            .overlay-action-btn-secondary {{
+                background: rgba(33,33,33,0.6);
             }}
         }}
     </style>
@@ -420,6 +512,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <p>Motor Backend: <span id="motorBackendValue" class="current-value">unknown</span></p>
                     <p>Motor Degraded: <span id="motorDegradedValue" class="current-value">no</span></p>
                     <p>Disabled Channels: <span id="motorDisabledChannelsValue" class="current-value">none</span></p>
+                    <p>Head Backend: <span id="headBackendValue" class="current-value">unknown</span></p>
                     <p>Follow Enabled: <span id="followEnabledValue" class="current-value">no</span></p>
                     <p>Follow Lost Target: <span id="followLostValue" class="current-value">no</span></p>
                     <p>Drive Linear: <span id="linearValue" class="current-value">0.00</span> m/s</p>
@@ -432,9 +525,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="section" data-tab="camera">
             <h2>Vision</h2>
             <div class="video-panel">
-                <img id="videoStream" class="video-frame" alt="Live camera stream" />
+                <div class="video-overlay-wrap">
+                    <img id="videoStream" class="video-frame" alt="Live camera stream" />
+                    <div class="overlay-quick-actions">
+                        <button class="overlay-action-btn" onclick="armMotors()">Arm</button>
+                        <button class="overlay-action-btn overlay-action-btn-danger" onclick="engageEstop()">E-Stop</button>
+                        <button class="overlay-action-btn overlay-action-btn-secondary" onclick="resetEstop()">Reset</button>
+                        <button class="overlay-action-btn overlay-action-btn-secondary" onclick="centerHead()">Center Head</button>
+                    </div>
+                    <div class="mobile-overlay-controls">
+                        <div id="driveOverlayPad" class="overlay-pad overlay-pad-drive">
+                            <div class="overlay-label">Drive</div>
+                            <div id="driveOverlayKnob" class="overlay-knob"></div>
+                        </div>
+                        <div id="headOverlayPad" class="overlay-pad overlay-pad-head">
+                            <div class="overlay-label">Head</div>
+                            <div id="headOverlayKnob" class="overlay-knob"></div>
+                        </div>
+                    </div>
+                </div>
                 <p>Stream: <span id="videoStatus" class="current-value">connecting...</span></p>
                 <p>FPS: <span id="videoFps" class="current-value">0.0</span></p>
+                <p>Head Backend: <span id="cameraHeadBackendValue" class="current-value">unknown</span></p>
             </div>
             <div style="margin-top: 14px;">
                 <h3 style="margin-bottom: 8px; color: #444;">Camera Head</h3>
@@ -479,7 +591,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let controlSocket = null;
         let heartbeatTimer = null;
         let controlReconnectTimer = null;
-        let dragActive = false;
         let controlMaxLinear = 0.5;
         let controlMaxAngular = 1.2;
         let headPanMinDeg = -70;
@@ -955,6 +1066,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             document.getElementById('headTiltValue').textContent = tiltDeg.toFixed(1);
         }}
 
+        function positionKnobByNormalized(pad, knob, normX, normY) {{
+            const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
+            const radius = center;
+            if (radius <= 0) {{
+                knob.style.left = Math.max(0, center) + 'px';
+                knob.style.top = Math.max(0, center) + 'px';
+                return;
+            }}
+            const clampedX = Math.max(-1, Math.min(normX, 1));
+            const clampedY = Math.max(-1, Math.min(normY, 1));
+            knob.style.left = (center + (clampedX * radius)) + 'px';
+            knob.style.top = (center + (clampedY * radius)) + 'px';
+        }}
+
+        function updateHeadOverlayKnob(panDeg, tiltDeg) {{
+            const pad = document.getElementById('headOverlayPad');
+            const knob = document.getElementById('headOverlayKnob');
+            if (!pad || !knob) return;
+            const panRange = Math.max(0.001, headPanMaxDeg - headPanMinDeg);
+            const tiltRange = Math.max(0.001, headTiltMaxDeg - headTiltMinDeg);
+            const panNorm = (((panDeg - headPanMinDeg) / panRange) * 2) - 1;
+            const tiltNorm = (((tiltDeg - headTiltMinDeg) / tiltRange) * 2) - 1;
+            positionKnobByNormalized(pad, knob, panNorm, tiltNorm);
+        }}
+
         function sendHeadCommand(panDeg, tiltDeg, center = false) {{
             if (!controlSocket || controlSocket.readyState !== WebSocket.OPEN) {{
                 showControlAlert('Control websocket is disconnected', 'error');
@@ -977,6 +1113,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const panDeg = parseFloat(panSlider.value) || 0;
             const tiltDeg = parseFloat(tiltSlider.value) || 0;
             setHeadDisplay(panDeg, tiltDeg);
+            updateHeadOverlayKnob(panDeg, tiltDeg);
             if (!sendNow) {{
                 return;
             }}
@@ -998,16 +1135,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const tiltSlider = document.getElementById('headTiltSlider');
             panSlider.value = 0;
             tiltSlider.value = 0;
-            setHeadDisplay(0, 0);
+            updateHeadFromSliders(false);
             sendHeadCommand(0, 0, true);
         }}
 
-        function stopJoystick() {{
-            const _pad = document.getElementById('joystickPad');
-            const _knob = document.getElementById('joystickKnob');
+        function centerDriveKnob(padId, knobId) {{
+            const _pad = document.getElementById(padId);
+            const _knob = document.getElementById(knobId);
+            if (!_pad || !_knob) return;
             const _c = Math.floor((_pad.offsetWidth - _knob.offsetWidth) / 2);
-            _knob.style.left = _c + 'px';
-            _knob.style.top = _c + 'px';
+            _knob.style.left = Math.max(0, _c) + 'px';
+            _knob.style.top = Math.max(0, _c) + 'px';
+        }}
+
+        function stopJoystick(padId = null, knobId = null) {{
+            if (padId && knobId) {{
+                centerDriveKnob(padId, knobId);
+            }} else {{
+                centerDriveKnob('joystickPad', 'joystickKnob');
+                centerDriveKnob('driveOverlayPad', 'driveOverlayKnob');
+            }}
             if (controlSocket && controlSocket.readyState === WebSocket.OPEN) {{
                 controlSocket.send(JSON.stringify({{ type: 'stop' }}));
             }}
@@ -1015,13 +1162,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             document.getElementById('angularValue').textContent = '0.00';
         }}
 
-        function setupJoystick() {{
-            const pad = document.getElementById('joystickPad');
-            const knob = document.getElementById('joystickKnob');
+        function bindDriveJoystick(padId, knobId) {{
+            const pad = document.getElementById(padId);
+            const knob = document.getElementById(knobId);
+            if (!pad || !knob) return;
+            let active = false;
 
             function updateFromEvent(event) {{
                 const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
                 const radius = center;
+                if (radius <= 0) {{
+                    return;
+                }}
                 const rect = pad.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
@@ -1042,24 +1194,88 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
 
             pad.addEventListener('pointerdown', (event) => {{
-                dragActive = true;
+                active = true;
                 pad.setPointerCapture(event.pointerId);
                 updateFromEvent(event);
             }});
 
             pad.addEventListener('pointermove', (event) => {{
-                if (!dragActive) return;
+                if (!active) return;
                 updateFromEvent(event);
             }});
 
             function release() {{
-                dragActive = false;
-                stopJoystick();
+                active = false;
+                stopJoystick(padId, knobId);
             }}
 
             pad.addEventListener('pointerup', release);
             pad.addEventListener('pointercancel', release);
-            pad.addEventListener('pointerleave', () => {{ if (dragActive) release(); }});
+            pad.addEventListener('pointerleave', () => {{ if (active) release(); }});
+        }}
+
+        function setupHeadOverlayJoystick() {{
+            const pad = document.getElementById('headOverlayPad');
+            const knob = document.getElementById('headOverlayKnob');
+            const panSlider = document.getElementById('headPanSlider');
+            const tiltSlider = document.getElementById('headTiltSlider');
+            if (!pad || !knob || !panSlider || !tiltSlider) return;
+
+            let active = false;
+
+            function mapToHead(event) {{
+                const center = Math.floor((pad.offsetWidth - knob.offsetWidth) / 2);
+                const radius = center;
+                if (radius <= 0) {{
+                    return;
+                }}
+                const rect = pad.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                let dx = event.clientX - centerX;
+                let dy = event.clientY - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > radius) {{
+                    dx = (dx / distance) * radius;
+                    dy = (dy / distance) * radius;
+                }}
+
+                const normX = dx / radius;
+                const normY = dy / radius;
+                positionKnobByNormalized(pad, knob, normX, normY);
+
+                const panDeg = headPanMinDeg + (((normX + 1) / 2) * (headPanMaxDeg - headPanMinDeg));
+                const tiltDeg = headTiltMinDeg + (((normY + 1) / 2) * (headTiltMaxDeg - headTiltMinDeg));
+
+                panSlider.value = String(panDeg);
+                tiltSlider.value = String(tiltDeg);
+                scheduleHeadCommand();
+            }}
+
+            pad.addEventListener('pointerdown', (event) => {{
+                active = true;
+                pad.setPointerCapture(event.pointerId);
+                mapToHead(event);
+            }});
+
+            pad.addEventListener('pointermove', (event) => {{
+                if (!active) return;
+                mapToHead(event);
+            }});
+
+            function release() {{
+                active = false;
+            }}
+
+            pad.addEventListener('pointerup', release);
+            pad.addEventListener('pointercancel', release);
+            pad.addEventListener('pointerleave', () => {{ if (active) release(); }});
+        }}
+
+        function setupJoystick() {{
+            bindDriveJoystick('joystickPad', 'joystickKnob');
+            bindDriveJoystick('driveOverlayPad', 'driveOverlayKnob');
+            setupHeadOverlayJoystick();
         }}
 
         async function refreshControlState() {{
@@ -1072,6 +1288,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('deadmanValue').textContent = data.deadman_triggered ? 'yes' : 'no';
                 document.getElementById('motorBackendValue').textContent = data.motor_backend || 'unknown';
                 document.getElementById('motorDegradedValue').textContent = data.motor_degraded ? 'yes' : 'no';
+                document.getElementById('headBackendValue').textContent = data.head_backend || 'unknown';
+                document.getElementById('cameraHeadBackendValue').textContent = data.head_backend || 'unknown';
                 const disabled = Array.isArray(data.motor_disabled_channels) ? data.motor_disabled_channels : [];
                 document.getElementById('motorDisabledChannelsValue').textContent = disabled.length ? disabled.join(', ') : 'none';
                 if (typeof data.head_pan_min_deg === 'number') {{
@@ -1098,7 +1316,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (typeof data.head_tilt_deg === 'number') {{
                     tiltSlider.value = data.head_tilt_deg;
                 }}
-                setHeadDisplay(parseFloat(panSlider.value) || 0, parseFloat(tiltSlider.value) || 0);
+                updateHeadFromSliders(false);
                 if (typeof data.max_linear_speed === 'number') {{
                     controlMaxLinear = data.max_linear_speed;
                 }}
@@ -1359,7 +1577,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             setInterval(refreshControlState, 500);
             setInterval(refreshSystemStatus, 5000);
             if (window.innerWidth <= 768) {{
-                showTab('drive');
+                showTab('camera');
             }}
         }});
     </script>
