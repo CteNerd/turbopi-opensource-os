@@ -74,9 +74,21 @@ class TestMotorCalibration(unittest.TestCase):
             VelocityCommand(linear_mps=1.0, angular_rps=1.0)
         )
 
-        self.assertEqual(left_output, 0.1)
-        self.assertEqual(right_output, 1.0)
+        self.assertEqual(left_output, 1.0)
+        self.assertEqual(right_output, -0.1)
         self.assertEqual(hal.get_state().last_command.linear_mps, 1.0)
+
+    def test_positive_angular_biases_left_side_for_right_turn(self):
+        hal = SimulatedMotorHAL(
+            calibration=MotorCalibration(max_linear_speed=1.0, max_angular_speed=1.0)
+        )
+        hal.arm()
+
+        left_output, right_output = hal.set_velocity(
+            VelocityCommand(linear_mps=0.0, angular_rps=0.5)
+        )
+
+        self.assertGreater(left_output, right_output)
 
     def test_stop_zeroes_outputs(self):
         hal = SimulatedMotorHAL()
@@ -96,6 +108,19 @@ class TestMotorCalibration(unittest.TestCase):
 
         # Forward command should drive all channels with vendor sign convention.
         self.assertEqual(board.calls[-1], [[1, -25], [2, 25], [3, -25], [4, 25]])
+
+    def test_vendor_hal_positive_angular_turns_right(self):
+        board = FakeBoard()
+        hal = HiwonderTurboPiMotorHAL(
+            board=board,
+            calibration=MotorCalibration(max_linear_speed=1.0, max_angular_speed=1.0),
+            max_duty=50,
+        )
+        hal.arm()
+
+        hal.set_velocity(VelocityCommand(linear_mps=0.0, angular_rps=0.5))
+
+        self.assertEqual(board.calls[-1], [[1, -25], [2, -25], [3, -25], [4, -25]])
 
     def test_vendor_hal_blocks_nonzero_output_on_disabled_channel(self):
         board = FakeBoard()

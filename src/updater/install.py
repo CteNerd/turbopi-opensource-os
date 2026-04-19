@@ -24,6 +24,48 @@ from typing import Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+OPTIONAL_VENDOR_SDK_PATHS = (
+    '/opt/turbopi/current/HiwonderSDK',
+    '/home/pi/TurboPi/HiwonderSDK',
+    '/home/pi/backup/HiwonderSDK',
+)
+
+OPTIONAL_SERVO_CONFIG_PATHS = (
+    '/opt/turbopi/current/servo_config.yaml',
+    '/home/pi/TurboPi/servo_config.yaml',
+)
+
+
+def _copytree_if_present(source_dir: str, dest_dir: str) -> bool:
+    """Copy a directory tree into the release when the source exists."""
+    if not os.path.isdir(source_dir):
+        return False
+    if os.path.exists(dest_dir):
+        return True
+    shutil.copytree(source_dir, dest_dir)
+    logger.info("Preserved optional runtime asset from %s to %s", source_dir, dest_dir)
+    return True
+
+
+def preserve_optional_runtime_assets(release_dir: str) -> None:
+    """Carry forward runtime-only vendor assets that are not shipped in git releases."""
+    sdk_dest = os.path.join(release_dir, 'HiwonderSDK')
+    servo_dest = os.path.join(release_dir, 'servo_config.yaml')
+
+    for sdk_source in OPTIONAL_VENDOR_SDK_PATHS:
+        if _copytree_if_present(sdk_source, sdk_dest):
+            break
+    else:
+        logger.warning('Optional vendor SDK not found in known locations; vendor HAL may be unavailable')
+
+    if not os.path.exists(servo_dest):
+        for servo_source in OPTIONAL_SERVO_CONFIG_PATHS:
+            if os.path.isfile(servo_source):
+                shutil.copy2(servo_source, servo_dest)
+                logger.info('Preserved servo configuration from %s to %s', servo_source, servo_dest)
+                break
+
+
 class InstallError(Exception):
     """Exception raised when installation fails"""
     pass
@@ -101,6 +143,8 @@ def extract_tarball(tarball_path: str, dest_dir: str) -> None:
         raise InstallError(f"Unexpected error during extraction: {e}")
     
     logger.info(f"Extraction complete: {dest_dir}")
+
+    preserve_optional_runtime_assets(dest_dir)
     
     # Fix ownership: services run as turbopi user, so release directory must be accessible.
     # On production robots, turbopi:turbopi ownership is required for services to access files.

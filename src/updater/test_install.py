@@ -9,14 +9,17 @@ import tempfile
 import tarfile
 import shutil
 import unittest
+from unittest.mock import patch
 from install import (
+    OPTIONAL_VENDOR_SDK_PATHS,
     extract_tarball,
     validate_release_structure,
     create_metadata,
     update_metadata_health_status,
     install_release,
     get_release_metadata,
-    InstallError
+    InstallError,
+    preserve_optional_runtime_assets,
 )
 
 
@@ -78,6 +81,23 @@ class TestExtractTarball(unittest.TestCase):
             extract_tarball(tarball_path, dest_dir)
         
         self.assertIn('Unsafe path', str(cm.exception))
+
+    def test_preserve_optional_runtime_assets_copies_current_release_sdk(self):
+        release_dir = os.path.join(self.temp_dir, 'release')
+        current_dir = os.path.join(self.temp_dir, 'current')
+        sdk_dir = os.path.join(current_dir, 'HiwonderSDK')
+        os.makedirs(release_dir)
+        os.makedirs(sdk_dir)
+
+        with open(os.path.join(sdk_dir, 'ros_robot_controller_sdk.py'), 'w') as f:
+            f.write('class Board:\n    pass\n')
+
+        fake_sdk_paths = (sdk_dir,) + tuple(path for path in OPTIONAL_VENDOR_SDK_PATHS if path != sdk_dir)
+        with patch('install.OPTIONAL_VENDOR_SDK_PATHS', fake_sdk_paths):
+            preserve_optional_runtime_assets(release_dir)
+
+        self.assertTrue(os.path.isdir(os.path.join(release_dir, 'HiwonderSDK')))
+        self.assertTrue(os.path.isfile(os.path.join(release_dir, 'HiwonderSDK', 'ros_robot_controller_sdk.py')))
 
 
 class TestValidateReleaseStructure(unittest.TestCase):

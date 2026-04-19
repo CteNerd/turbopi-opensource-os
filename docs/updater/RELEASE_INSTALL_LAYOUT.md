@@ -31,6 +31,8 @@ The release install layout supports:
 │   │   │   ├── turbopi-api.service
 │   │   │   ├── turbopi-ui.service
 │   │   │   └── turbopi-updater.service
+│   │   ├── HiwonderSDK/  # Optional preserved vendor SDK when present on target
+│   │   ├── servo_config.yaml # Optional preserved vendor servo centers
 │   │   ├── lib/          # Shared libraries (if needed)
 │   │   └── metadata.json # Release metadata and checksums
 │   ├── 0.1.1/            # Example: Release version 0.1.1
@@ -51,6 +53,10 @@ The release install layout supports:
 /var/lib/turbopi/         # Persistent state data (shared across versions)
 └── ...
 ```
+
+Vendor runtime assets such as `HiwonderSDK/` and `servo_config.yaml` are not
+stored in this repository, but installer and updater flows preserve them into
+new releases when they already exist on the target robot.
 
 ## Symlink Strategy
 

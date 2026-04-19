@@ -705,6 +705,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const VIDEO_STREAM_PATH = '/video/stream';
         const VIDEO_STATS_PATH = '/video/stats';
         const VIDEO_STREAM_SECONDS = 3600;
+        const DRIVE_ANGULAR_SIGN = {drive_angular_sign};
         let controlSocket = null;
         let heartbeatTimer = null;
         let controlReconnectTimer = null;
@@ -1306,7 +1307,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 knob.style.top = (center + dy) + 'px';
 
                 const linear = (-dy / radius) * controlMaxLinear;
-                const angular = (dx / radius) * controlMaxAngular;
+                const angular = (dx / radius) * controlMaxAngular * DRIVE_ANGULAR_SIGN;
                 sendDrive(linear, angular);
             }}
 
@@ -1726,8 +1727,15 @@ class UIHandler(SimpleHTTPRequestHandler):
             robot_name = os.environ.get('ROBOT_NAME', 'TurboPi')
             api_port = os.environ.get('API_PORT', '8080')
             ws_port = os.environ.get('API_WS_PORT', '8765')
+            drive_invert = os.environ.get('UI_DRIVE_INVERT_STEERING', 'false').strip().lower()
+            drive_angular_sign = -1 if drive_invert in ('1', 'true', 'yes', 'on') else 1
             
-            html = HTML_TEMPLATE.format(robot_name=robot_name, api_port=api_port, ws_port=ws_port)
+            html = HTML_TEMPLATE.format(
+                robot_name=robot_name,
+                api_port=api_port,
+                ws_port=ws_port,
+                drive_angular_sign=drive_angular_sign,
+            )
             self.wfile.write(html.encode())
         else:
             self.send_error(404, "Not Found")

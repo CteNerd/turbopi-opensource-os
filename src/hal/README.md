@@ -22,6 +22,10 @@ This module currently provides:
 The HAL does not replace the Safety Arbiter. It is the hardware-facing layer
 that safety and control modules call.
 
+Angular sign convention:
+- Positive `angular_rps` means turn right.
+- Negative `angular_rps` means turn left.
+
 ## Modules
 
 - `motor.py`: velocity commands, normalized outputs, arm/disarm/stop behavior

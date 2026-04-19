@@ -38,28 +38,45 @@ echo "Installing service binaries..."
 cp -r "$REPO_ROOT/src/api" /opt/turbopi/current/src/
 cp -r "$REPO_ROOT/src/ui" /opt/turbopi/current/src/
 cp -r "$REPO_ROOT/src/updater" /opt/turbopi/current/src/
+cp -r "$REPO_ROOT/src/control" /opt/turbopi/current/src/
+cp -r "$REPO_ROOT/src/hal" /opt/turbopi/current/src/
+cp -r "$REPO_ROOT/src/vision" /opt/turbopi/current/src/
 cp -r "$REPO_ROOT/src/voice" /opt/turbopi/current/src/
+
+if [ -d /home/pi/TurboPi/HiwonderSDK ] && [ ! -d /opt/turbopi/current/HiwonderSDK ]; then
+    echo "Preserving vendor SDK from /home/pi/TurboPi/HiwonderSDK..."
+    cp -r /home/pi/TurboPi/HiwonderSDK /opt/turbopi/current/
+fi
+
+if [ -f /home/pi/TurboPi/servo_config.yaml ] && [ ! -f /opt/turbopi/current/servo_config.yaml ]; then
+    echo "Preserving vendor servo configuration from /home/pi/TurboPi/servo_config.yaml..."
+    cp /home/pi/TurboPi/servo_config.yaml /opt/turbopi/current/
+fi
 
 # Create wrapper scripts in bin directory
 echo "Creating service wrappers..."
 
 cat > /opt/turbopi/current/bin/api << 'EOF'
 #!/bin/bash
+cd /opt/turbopi/current || exit 1
 exec /usr/bin/python3 /opt/turbopi/current/src/api/main.py
 EOF
 
 cat > /opt/turbopi/current/bin/ui << 'EOF'
 #!/bin/bash
+cd /opt/turbopi/current || exit 1
 exec /usr/bin/python3 /opt/turbopi/current/src/ui/main.py
 EOF
 
 cat > /opt/turbopi/current/bin/updater << 'EOF'
 #!/bin/bash
+cd /opt/turbopi/current || exit 1
 exec /usr/bin/python3 /opt/turbopi/current/src/updater/main.py
 EOF
 
 cat > /opt/turbopi/current/bin/wake-word << 'EOF'
 #!/bin/bash
+cd /opt/turbopi/current || exit 1
 exec /usr/bin/python3 /opt/turbopi/current/src/voice/main.py
 EOF
 

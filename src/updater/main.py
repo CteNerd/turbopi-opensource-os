@@ -352,7 +352,7 @@ class UpdaterService:
             logging.warning('Auto-update scheduler: could not fetch release metadata')
             return
 
-        current = os.environ.get('VERSION', '0.1.0-dev')
+        current = os.environ.get('VERSION', '0.1.17')
         latest = release.get('version', '')
         if not self._is_newer_version(current, latest):
             logging.info(
