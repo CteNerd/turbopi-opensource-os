@@ -1,0 +1,53 @@
+TurboPi Test Harness Notes (API/UI)
+Last Updated: 2026-04-19
+
+Problem Summary
+- Running broad pytest targets from src/api can produce unstable results that look like app regressions but are often test harness collisions.
+- Common symptoms observed:
+  - OSError: [Errno 48] Address already in use
+  - ConnectionRefusedError / ConnectionResetError in API integration tests
+  - follow-on failures in unrelated tests after one server fixture fails to bind
+
+Why It Happens
+- Multiple tests bind fixed localhost ports (for example 18080) and are not fully isolated when run together.
+- Some tests spin up subprocess API servers and assume clean port ownership.
+- If one server does not teardown cleanly, later tests fail due to port reuse/conflict.
+
+Known Collision-Prone Tests
+- src/api/test_integration_updates.py (fixed API port 18080)
+- src/api/test_wake_word_api.py (binds localhost:18080)
+- Other endpoint suites can fail secondarily once the API test process is in a bad state.
+
+Recommended Stable Test Execution Order
+1) Run core suites that do not use fixed-port subprocess orchestration:
+   - cd src/control && python -m pytest -q
+   - cd ../hal && python -m pytest -q
+   - cd ../vision && python -m pytest -q
+   - cd ../voice && python -m pytest -q
+
+2) Run API suite excluding known collision-heavy integration pieces:
+   - cd ../api && python -m pytest -q -k "not integration_updates and not wake_word"
+
+3) Run collision-prone integration tests in isolated invocations:
+   - cd src/api && python -m pytest -q test_integration_updates.py
+   - cd src/api && python -m pytest -q test_wake_word_api.py
+
+4) If a collision is suspected, check and clear listeners before rerun:
+   - lsof -nP -iTCP:18080 -sTCP:LISTEN
+   - lsof -nP -iTCP:18081 -sTCP:LISTEN
+   - lsof -nP -iTCP:18082 -sTCP:LISTEN
+
+UI Control Troubleshooting (Desktop + Mobile)
+- Confirm API state first:
+  - curl -s http://127.0.0.1:8080/control/state | python3 -m json.tool
+- Confirm WebSocket status in UI shows connected.
+- Confirm robot is armed before expecting drive movement.
+- Confirm head_backend is vendor for physical pan/tilt.
+- Tail API logs while moving overlays:
+  - sudo journalctl -u turbopi-api -f -n 50
+
+Recent UI Hardening Applied
+- Touch-device overlay mode kept in both portrait and landscape.
+- Pointer control robustness improved:
+  - preventDefault() on pointerdown/pointermove for drive/head pads
+  - use lostpointercapture instead of pointerleave to avoid premature stop release
