@@ -34,3 +34,9 @@ vision-based autonomy, voice interaction, and controlled software updates.
 ---
 
 ## Repository Structure
+
+---
+
+## Release Process
+
+See [RELEASE.md](./RELEASE.md) for step-by-step instructions on how to cut a new release, including version bump, PR, tagging, and triggering the release pipeline.
