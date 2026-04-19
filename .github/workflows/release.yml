@@ -100,6 +100,19 @@ jobs:
           mkdir -p "$STAGING/bin"
           mkdir -p "$STAGING/systemd"
 
+          # Preserve optional runtime-only vendor assets when they are present in
+          # the working tree used for the release build.
+          for optional_dir in HiwonderSDK; do
+            if [ -d "$optional_dir" ]; then
+              cp -R "$optional_dir" "$STAGING/$optional_dir"
+            fi
+          done
+          for optional_file in servo_config.yaml; do
+            if [ -f "$optional_file" ]; then
+              cp "$optional_file" "$STAGING/$optional_file"
+            fi
+          done
+
           # Copy source modules (skip test files and __pycache__)
           for module in api ui updater control hal vision voice; do
             [ -d "src/$module" ] || continue

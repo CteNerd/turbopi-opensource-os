@@ -130,7 +130,7 @@ def get_current_version() -> str:
     except Exception:
         pass  # Fall through to environment variable
     
-    return os.environ.get('VERSION', '0.1.0-dev')
+    return os.environ.get('VERSION', '0.1.17')
 
 
 def redact_secrets(text: str) -> str:

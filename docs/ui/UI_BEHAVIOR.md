@@ -32,6 +32,7 @@
 - Joystick release sends stop command
 - WebSocket disconnect or heartbeat timeout must stop motion immediately
 - UI polls control state to display Armed, E-Stop latched, and deadman status
+- `UI_DRIVE_INVERT_STEERING=true` flips joystick steering in the UI for kits with mirrored left/right turning behavior
 
 ## Vision Page
 - UI displays live MJPEG stream from GET /video/stream

@@ -197,8 +197,8 @@ class BaseMotorHAL(ABC):
             1.0,
         )
 
-        left_output = ((linear_norm - angular_norm) * self.calibration.left_scale) + self.calibration.left_trim
-        right_output = ((linear_norm + angular_norm) * self.calibration.right_scale) + self.calibration.right_trim
+        left_output = ((linear_norm + angular_norm) * self.calibration.left_scale) + self.calibration.left_trim
+        right_output = ((linear_norm - angular_norm) * self.calibration.right_scale) + self.calibration.right_trim
 
         return (
             _clamp(left_output, -1.0, 1.0),

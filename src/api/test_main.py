@@ -35,7 +35,7 @@ class TestGetCurrentVersion(unittest.TestCase):
         """Test default version when VERSION env var is not set"""
         with patch.dict(os.environ, {}, clear=True):
             result = get_current_version()
-            self.assertEqual(result, '0.1.0-dev')
+            self.assertEqual(result, '0.1.17')
     
     def test_get_version_with_dev_suffix(self):
         """Test version with -dev suffix"""
