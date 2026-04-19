@@ -165,6 +165,38 @@ class TestUpdateConfigAPI(unittest.TestCase):
         self.assertEqual(data.get('error'), 'persistence_failed')
         self.assertFalse(data.get('persisted'))
 
+    def test_post_update_config_persists_when_directory_is_not_writable(self):
+        restricted_dir = tempfile.mkdtemp(dir=self.__class__._tmp_dir.name)
+        restricted_config = os.path.join(restricted_dir, 'config.env')
+        with open(restricted_config, 'w', encoding='utf-8') as handle:
+            handle.write('AUTO_UPDATE=false\nAUTO_UPDATE_CHANNEL=stable\nAUTO_UPDATE_SCHEDULE_UTC=03:00\n')
+
+        # Simulate hardened /etc directory: file is writable, directory is not.
+        os.chmod(restricted_config, 0o660)
+        os.chmod(restricted_dir, 0o550)
+
+        previous_path = os.environ.get('CONFIG_ENV_PATH')
+        os.environ['CONFIG_ENV_PATH'] = restricted_config
+        try:
+            status, data = self._make_request(
+                '/updates/config',
+                method='POST',
+                data={'schedule_utc': '04:45'},
+                origin='http://localhost:8081',
+            )
+            self.assertEqual(status, 200)
+            self.assertTrue(data.get('persisted'))
+
+            with open(restricted_config, 'r', encoding='utf-8') as handle:
+                content = handle.read()
+            self.assertIn('AUTO_UPDATE_SCHEDULE_UTC=04:45', content)
+        finally:
+            if previous_path is None:
+                os.environ.pop('CONFIG_ENV_PATH', None)
+            else:
+                os.environ['CONFIG_ENV_PATH'] = previous_path
+            os.chmod(restricted_dir, 0o750)
+
 
 if __name__ == '__main__':
     unittest.main()

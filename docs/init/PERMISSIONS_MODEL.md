@@ -58,10 +58,10 @@ TurboPi services run under different user contexts with strict systemd sandbox i
 
 ```
 /etc/turbopi/                    root:turbopi      drwxr-x--- (750)
-└── config.env                   root:turbopi      -rw-r----- (640)
+└── config.env                   root:turbopi      -rw-rw---- (660)
 ```
 
-**Rationale**: Configuration file contains sensitive data (API tokens, passwords). Only root can write, but `turbopi` group can read. Services running as `turbopi` user can read via group membership.
+**Rationale**: Configuration file contains sensitive data (API tokens, passwords). Keep ownership as `root:turbopi`, but allow group write so the API service can persist safe UI-managed settings without root.
 
 ## SystemD Sandbox Restrictions
 
@@ -70,7 +70,7 @@ All services use `ProtectSystem=strict`, making `/usr`, `/boot`, and `/etc` read
 ### turbopi-api.service
 
 ```ini
-ReadWritePaths=/var/lib/turbopi /var/log/turbopi
+ReadWritePaths=/var/lib/turbopi /var/log/turbopi /etc/turbopi/config.env
 StateDirectory=turbopi
 StateDirectoryMode=0750
 LogsDirectory=turbopi
@@ -107,7 +107,7 @@ Must create and set ownership on:
 2. `/var/lib/turbopi` → `turbopi:turbopi` (mode 0750)
 3. `/var/log/turbopi` → `turbopi:turbopi` (mode 0750)
 4. `/etc/turbopi` → `root:turbopi` (mode 0750)
-5. `/etc/turbopi/config.env` → `root:turbopi` (mode 0640)
+5. `/etc/turbopi/config.env` → `root:turbopi` (mode 0660)
 
 ### Release Updates (updater/install.py extract_tarball)
 

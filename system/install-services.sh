@@ -108,7 +108,7 @@ echo "  ✓ State and log directories created"
 chown root:turbopi /etc/turbopi
 chmod 0750 /etc/turbopi
 chown root:turbopi /etc/turbopi/config.env
-chmod 0640 /etc/turbopi/config.env
+chmod 0660 /etc/turbopi/config.env
 echo "  ✓ Configuration permissions set"
 
 # Install systemd service files

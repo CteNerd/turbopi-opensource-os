@@ -63,8 +63,8 @@ echo "  ✓ /etc/turbopi (root:turbopi, 0750)"
 
 if [ -f /etc/turbopi/config.env ]; then
     chown root:turbopi /etc/turbopi/config.env
-    chmod 0640 /etc/turbopi/config.env
-    echo "  ✓ /etc/turbopi/config.env (root:turbopi, 0640)"
+    chmod 0660 /etc/turbopi/config.env
+    echo "  ✓ /etc/turbopi/config.env (root:turbopi, 0660)"
 fi
 
 echo

@@ -196,7 +196,7 @@ Runtime configuration is stored outside `/opt/turbopi` and shared across all rel
 
 - **Location**: `/etc/turbopi/config.env`
 - **Format**: Shell environment variables
-- **Permissions**: `640` (root:turbopi)
+- **Permissions**: `660` (root:turbopi)
 - **Upgrade Behavior**: Preserved across updates
 
 ### Logs (`/var/log/turbopi/`)

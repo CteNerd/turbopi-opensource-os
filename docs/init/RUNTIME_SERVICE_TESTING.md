@@ -344,7 +344,7 @@ If configuration changes don't take effect:
 
 1. Verify config file format (no syntax errors)
 2. Restart services after config changes
-3. Check file permissions (should be 640, owner root:turbopi, group read-only)
+3. Check file permissions (should be 660, owner root:turbopi, group read-write)
 4. Verify systemd EnvironmentFile directive in service files
 
 ---

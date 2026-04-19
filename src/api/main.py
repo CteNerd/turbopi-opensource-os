@@ -232,15 +232,23 @@ def persist_wake_word_config(wake_word: Optional[str], enabled: Optional[bool]) 
             updated_lines.append(f'{key}={value}\n')
 
     try:
+        if os.path.exists(config_path):
+            # Rewrite existing config in-place so we do not require directory write access.
+            with open(config_path, 'r+', encoding='utf-8') as handle:
+                handle.seek(0)
+                handle.writelines(updated_lines)
+                handle.truncate()
+                handle.flush()
+                os.fsync(handle.fileno())
+            return True
+
         config_dir = os.path.dirname(config_path)
         if config_dir:
             os.makedirs(config_dir, exist_ok=True)
-        tmp_path = f'{config_path}.tmp'
-        with open(tmp_path, 'w', encoding='utf-8') as handle:
+        with open(config_path, 'w', encoding='utf-8') as handle:
             handle.writelines(updated_lines)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, config_path)
         return True
     except Exception:
         logging.exception('Failed writing persisted update configuration')
@@ -320,15 +328,24 @@ def persist_update_config(
             updated_lines.append(f'{key}={value}\n')
 
     try:
+        if os.path.exists(config_path):
+            # Rewrite existing config in-place so API services can persist settings when
+            # file permissions allow writes but /etc directory remains read-only.
+            with open(config_path, 'r+', encoding='utf-8') as handle:
+                handle.seek(0)
+                handle.writelines(updated_lines)
+                handle.truncate()
+                handle.flush()
+                os.fsync(handle.fileno())
+            return True
+
         config_dir = os.path.dirname(config_path)
         if config_dir:
             os.makedirs(config_dir, exist_ok=True)
-        tmp_path = f'{config_path}.tmp'
-        with open(tmp_path, 'w', encoding='utf-8') as handle:
+        with open(config_path, 'w', encoding='utf-8') as handle:
             handle.writelines(updated_lines)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, config_path)
         return True
     except Exception:
         return False
