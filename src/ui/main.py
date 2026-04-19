@@ -362,6 +362,123 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 background: rgba(33,33,33,0.6);
             }}
         }}
+
+        @media (hover: none) and (pointer: coarse) {{
+            body {{
+                margin: 0;
+                padding: 0;
+            }}
+            .container {{
+                padding: 12px;
+                box-shadow: none;
+                border-radius: 0;
+            }}
+            h1 {{
+                font-size: 1.3rem;
+                margin-top: 12px;
+                margin-bottom: 4px;
+            }}
+            .status {{
+                display: none;
+            }}
+            .mobile-tabs {{
+                display: flex;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                background: #fff;
+                border-bottom: 2px solid #e0e0e0;
+                margin: 8px -12px 16px;
+                padding: 0;
+            }}
+            .tab-btn {{
+                flex: 1;
+                padding: 12px 8px;
+                border: none;
+                border-bottom: 3px solid transparent;
+                background: transparent;
+                font-size: 15px;
+                font-weight: 600;
+                color: #888;
+                cursor: pointer;
+            }}
+            .tab-btn.active {{
+                color: #4CAF50;
+                border-bottom-color: #4CAF50;
+            }}
+            .section[data-tab] {{
+                display: none;
+            }}
+            .section[data-tab].tab-visible {{
+                display: block;
+            }}
+            .control-btn-grid {{
+                display: grid !important;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }}
+            .control-btn-grid .button {{
+                margin-top: 0;
+                width: 100%;
+                padding: 14px 10px;
+                font-size: 15px;
+            }}
+            .joystick-wrap {{
+                justify-content: center;
+                flex-direction: column;
+                align-items: center;
+            }}
+            .joystick-pad {{
+                width: 260px;
+                height: 260px;
+            }}
+            .joystick-knob {{
+                left: 101px;
+                top: 101px;
+            }}
+            .video-frame {{
+                min-height: 200px;
+                max-width: 100%;
+            }}
+            .mobile-overlay-controls {{
+                display: block;
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+            }}
+            .mobile-overlay-controls .overlay-pad {{
+                pointer-events: auto;
+            }}
+            .overlay-quick-actions {{
+                display: flex;
+                gap: 6px;
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                z-index: 3;
+                pointer-events: none;
+            }}
+            .overlay-action-btn {{
+                pointer-events: auto;
+                border: 1px solid rgba(255,255,255,0.35);
+                background: rgba(15,15,15,0.55);
+                color: #fff;
+                border-radius: 999px;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 6px 10px;
+                line-height: 1;
+                backdrop-filter: blur(2px);
+                -webkit-backdrop-filter: blur(2px);
+            }}
+            .overlay-action-btn-danger {{
+                background: rgba(183,28,28,0.65);
+            }}
+            .overlay-action-btn-secondary {{
+                background: rgba(33,33,33,0.6);
+            }}
+        }}
     </style>
 </head>
 <body>
