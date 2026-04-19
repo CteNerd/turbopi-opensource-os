@@ -344,18 +344,34 @@ def create_motor_hal_from_env() -> BaseMotorHAL:
     """
     backend = os.environ.get('HAL_MOTOR_BACKEND', 'sim').strip().lower()
     vendor_required = _get_bool('HAL_MOTOR_VENDOR_REQUIRED', False)
+    logger.info(f"[HAL] Requested HAL_MOTOR_BACKEND={backend} (required={vendor_required})")
     if backend == 'vendor':
         try:
-            return HiwonderTurboPiMotorHAL()
+            logger.info("[HAL] Attempting to instantiate HiwonderTurboPiMotorHAL (vendor backend)")
+            hal = HiwonderTurboPiMotorHAL()
+            logger.info("[HAL] Successfully instantiated HiwonderTurboPiMotorHAL")
+            return hal
         except MotorSafetyError as exc:
+            logger.error(f"[HAL] MotorSafetyError during vendor backend instantiation: {exc}", exc_info=True)
             if vendor_required:
+                logger.critical('[HAL] HAL_MOTOR_BACKEND=vendor but vendor backend is unavailable and required; raising error.')
                 raise MotorSafetyError(
                     'HAL_MOTOR_BACKEND=vendor but vendor backend is unavailable while HAL_MOTOR_VENDOR_REQUIRED=true'
                 ) from exc
-            logger.warning('Falling back to SimulatedMotorHAL because vendor backend is unavailable: %s', str(exc))
+            logger.warning('[HAL] Falling back to SimulatedMotorHAL because vendor backend is unavailable: %s', str(exc))
+            return SimulatedMotorHAL()
+        except Exception as exc:
+            logger.error(f"[HAL] Unexpected error during vendor backend instantiation: {exc}", exc_info=True)
+            if vendor_required:
+                logger.critical('[HAL] HAL_MOTOR_BACKEND=vendor but vendor backend is unavailable and required; raising error.')
+                raise MotorSafetyError(
+                    'HAL_MOTOR_BACKEND=vendor but vendor backend is unavailable while HAL_MOTOR_VENDOR_REQUIRED=true'
+                ) from exc
+            logger.warning('[HAL] Falling back to SimulatedMotorHAL due to unexpected error: %s', str(exc))
             return SimulatedMotorHAL()
 
     if backend != 'sim':
-        logger.warning('Unknown HAL_MOTOR_BACKEND=%s (expected "sim" or "vendor"), falling back to sim', backend)
+        logger.warning('[HAL] Unknown HAL_MOTOR_BACKEND=%s (expected "sim" or "vendor"), falling back to sim', backend)
 
+    logger.info('[HAL] Using SimulatedMotorHAL (sim backend)')
     return SimulatedMotorHAL()

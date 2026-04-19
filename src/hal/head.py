@@ -332,17 +332,33 @@ def create_head_hal_from_env() -> BaseHeadHAL:
     """
     backend = os.environ.get('HAL_HEAD_BACKEND', 'sim').strip().lower()
     vendor_required = _get_bool('HAL_HEAD_VENDOR_REQUIRED', False)
+    logger.info(f"[HAL] Requested HAL_HEAD_BACKEND={backend} (required={vendor_required})")
     if backend == 'vendor':
         try:
-            return HiwonderTurboPiHeadHAL()
+            logger.info("[HAL] Attempting to instantiate HiwonderTurboPiHeadHAL (vendor backend)")
+            hal = HiwonderTurboPiHeadHAL()
+            logger.info("[HAL] Successfully instantiated HiwonderTurboPiHeadHAL")
+            return hal
         except HeadSafetyError as exc:
+            logger.error(f"[HAL] HeadSafetyError during vendor backend instantiation: {exc}", exc_info=True)
             if vendor_required:
+                logger.critical('[HAL] HAL_HEAD_BACKEND=vendor but vendor backend is unavailable and required; raising error.')
                 raise HeadSafetyError(
                     'HAL_HEAD_BACKEND=vendor but vendor backend is unavailable while HAL_HEAD_VENDOR_REQUIRED=true'
                 ) from exc
-            logger.warning('Falling back to SimulatedHeadHAL because vendor backend is unavailable: %s', str(exc))
+            logger.warning('[HAL] Falling back to SimulatedHeadHAL because vendor backend is unavailable: %s', str(exc))
+            return SimulatedHeadHAL()
+        except Exception as exc:
+            logger.error(f"[HAL] Unexpected error during vendor backend instantiation: {exc}", exc_info=True)
+            if vendor_required:
+                logger.critical('[HAL] HAL_HEAD_BACKEND=vendor but vendor backend is unavailable and required; raising error.')
+                raise HeadSafetyError(
+                    'HAL_HEAD_BACKEND=vendor but vendor backend is unavailable while HAL_HEAD_VENDOR_REQUIRED=true'
+                ) from exc
+            logger.warning('[HAL] Falling back to SimulatedHeadHAL due to unexpected error: %s', str(exc))
             return SimulatedHeadHAL()
 
     if backend != 'sim':
-        logger.warning('Unknown HAL_HEAD_BACKEND=%s (expected "sim" or "vendor"), falling back to sim', backend)
+        logger.warning('[HAL] Unknown HAL_HEAD_BACKEND=%s (expected "sim" or "vendor"), falling back to sim', backend)
+    logger.info('[HAL] Using SimulatedHeadHAL (sim backend)')
     return SimulatedHeadHAL()
