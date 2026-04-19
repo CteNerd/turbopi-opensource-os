@@ -228,6 +228,56 @@ def atomic_symlink_update(link_path: str, target_path: str) -> None:
         raise UpdateError(f"Error updating symlink {link_path}: {e}")
 
 
+def _ensure_state_directory_permissions() -> None:
+    """
+    Ensure state directories have correct permissions for the turbopi user.
+    
+    This is called after systemd unit updates to ensure that systemd's
+    StateDirectory creation (which may have root ownership) is overridden
+    with correct turbopi:turbopi ownership. This fixes:
+    - Permission denied errors when API tries to write update-trigger.json
+    - Permission issues with logging and temp files
+    """
+    try:
+        # State and log directories that services need to write to
+        dirs = [
+            '/var/lib/turbopi',
+            '/var/log/turbopi',
+        ]
+        
+        for dir_path in dirs:
+            # Create if missing
+            os.makedirs(dir_path, mode=0o750, exist_ok=True)
+            
+            # Fix ownership to turbopi user
+            result = subprocess.run(
+                ['chown', 'turbopi:turbopi', dir_path],
+                timeout=5,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.warning(f"Failed to chown {dir_path}: {result.stderr}")
+                continue
+            
+            # Fix permissions
+            result = subprocess.run(
+                ['chmod', '0750', dir_path],
+                timeout=5,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.warning(f"Failed to chmod {dir_path}: {result.stderr}")
+                continue
+            
+            logger.info(f"State directory permissions verified: {dir_path} (turbopi:turbopi, 0750)")
+    
+    except Exception as e:
+        logger.error(f"Error ensuring state directory permissions: {e}")
+        # Don't raise - this is a best-effort fix, services may still work
+
+
 def restart_services() -> bool:
     """
     Restart TurboPi services in dependency order.
@@ -438,6 +488,11 @@ def apply_update(
         # Step 4: Sync systemd unit files (if provided in release payload)
         logger.info("Step 4: Sync systemd units")
         systemd_unit_backups = sync_systemd_units_from_release(new_release_dir)
+        
+        # Step 4a: Ensure state directory permissions are correct
+        # (systemd StateDirectory might have created them, so fix ownership explicitly)
+        logger.info("Step 4a: Fix state directory permissions")
+        _ensure_state_directory_permissions()
         
         # Step 5: Restart services
         logger.info("Step 5: Restart services")

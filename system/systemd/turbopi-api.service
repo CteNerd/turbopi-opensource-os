@@ -10,6 +10,10 @@ User=turbopi
 Group=turbopi
 WorkingDirectory=/opt/turbopi/current
 EnvironmentFile=/etc/turbopi/config.env
+# Ensure state directory exists with correct permissions before service starts
+ExecStartPre=-/bin/mkdir -p /var/lib/turbopi
+ExecStartPre=/bin/chown turbopi:turbopi /var/lib/turbopi
+ExecStartPre=/bin/chmod 0750 /var/lib/turbopi
 ExecStart=/opt/turbopi/current/bin/api
 Restart=on-failure
 RestartSec=5

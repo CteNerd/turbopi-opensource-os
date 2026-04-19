@@ -139,6 +139,17 @@ cp "$REPO_ROOT/system/systemd/turbopi-wake-word.service" /etc/systemd/system/
 echo "Reloading systemd..."
 systemctl daemon-reload
 
+# Ensure state directories have correct permissions after systemd reload
+# (systemd's StateDirectory might create them, so we fix ownership explicitly)
+echo "Ensuring state directory permissions..."
+mkdir -p /var/lib/turbopi
+chown turbopi:turbopi /var/lib/turbopi
+chmod 0750 /var/lib/turbopi
+mkdir -p /var/log/turbopi
+chown turbopi:turbopi /var/log/turbopi
+chmod 0750 /var/log/turbopi
+echo "  ✓ State directories verified"
+
 # Enable services
 echo "Enabling services..."
 systemctl enable turbopi-api.service
