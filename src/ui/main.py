@@ -1311,6 +1311,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
 
             pad.addEventListener('pointerdown', (event) => {{
+                event.preventDefault();
                 active = true;
                 pad.setPointerCapture(event.pointerId);
                 updateFromEvent(event);
@@ -1318,6 +1319,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             pad.addEventListener('pointermove', (event) => {{
                 if (!active) return;
+                event.preventDefault();
                 updateFromEvent(event);
             }});
 
@@ -1328,7 +1330,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             pad.addEventListener('pointerup', release);
             pad.addEventListener('pointercancel', release);
-            pad.addEventListener('pointerleave', () => {{ if (active) release(); }});
+            pad.addEventListener('lostpointercapture', () => {{ if (active) release(); }});
         }}
 
         function setupHeadOverlayJoystick() {{
@@ -1370,6 +1372,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }}
 
             pad.addEventListener('pointerdown', (event) => {{
+                event.preventDefault();
                 active = true;
                 pad.setPointerCapture(event.pointerId);
                 mapToHead(event);
@@ -1377,6 +1380,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             pad.addEventListener('pointermove', (event) => {{
                 if (!active) return;
+                event.preventDefault();
                 mapToHead(event);
             }});
 
@@ -1386,7 +1390,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             pad.addEventListener('pointerup', release);
             pad.addEventListener('pointercancel', release);
-            pad.addEventListener('pointerleave', () => {{ if (active) release(); }});
+            pad.addEventListener('lostpointercapture', () => {{ if (active) release(); }});
         }}
 
         function setupJoystick() {{
